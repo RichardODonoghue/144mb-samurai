@@ -38,6 +38,7 @@ extern SetForegroundWindow
 %include "src/render.asm"
 %include "src/input.asm"
 %include "src/wndproc.asm"
+%include "src/level.asm"
 
 ; ============================================================
 ; ENTRY POINT & GAME LOOP
@@ -68,6 +69,7 @@ game_loop:
 
 .do_frame:
     call    process_input
+    call    level_check_end
     call    render_frame
     mov     rcx, [g_hwnd]
     xor     edx, edx
@@ -90,14 +92,9 @@ main:
     mov     [g_hinst], rax
     mov     r12, rax
 
-    ; Init player state
-    mov     eax, [player_start_x]
-    mov     [player_x], eax
-    mov     eax, [player_start_y]
-    mov     [player_y], eax
-    mov     al, [player_start_angle]
-    mov     [player_angle], al
-    mov     dword [player_angle_f], 0        ; float 0.0
+    ; Init player and load level 1 (burned village)
+    mov     ecx, 1
+    call    level_init
     mov     byte [player_paused], 0
 
     ; Register window class

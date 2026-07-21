@@ -71,9 +71,30 @@ init_palette:
     mov     dword [rdi + 20], 00DCB4A0h
     ; Entry 126: skin dark          (B=0x73, G=0x8C, R=0xB4)
     mov     dword [rdi + 24], 00B48C73h
-    add     rdi, 28
-    ; Fill remaining with black
-    mov     ecx, 121
+    add     rdi, 28                    ; rdi -> entry 127
+    ; Entry 127: black padding
+    mov     dword [rdi], 0
+    ; Entries 128-135: burnt wood walls (type 5, 4 light + 4 dark)
+    mov     dword [rdi + 4],  0046321Eh
+    mov     dword [rdi + 8],  00372616h
+    mov     dword [rdi + 12], 0028190Eh
+    mov     dword [rdi + 16], 00190F08h
+    mov     dword [rdi + 20], 00322314h
+    mov     dword [rdi + 24], 0023160Ch
+    mov     dword [rdi + 28], 00160C06h
+    mov     dword [rdi + 32], 000C0603h
+    ; Entries 136-143: fire walls (type 6, 4 bright + 4 dark)
+    mov     dword [rdi + 36], 00FFE63Ch
+    mov     dword [rdi + 40], 00FF8C14h
+    mov     dword [rdi + 44], 00DC280Ah
+    mov     dword [rdi + 48], 00FFB450h
+    mov     dword [rdi + 52], 00961405h
+    mov     dword [rdi + 56], 00640A02h
+    mov     dword [rdi + 60], 003C0501h
+    mov     dword [rdi + 64], 001E0200h
+    add     rdi, 68                    ; rdi -> entry 144
+    ; Fill entries 144-247 with black
+    mov     ecx, 104
     xor     eax, eax
     rep     stosd
 
