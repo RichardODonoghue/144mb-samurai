@@ -12,8 +12,32 @@ wndproc:
     je      .quit
     cmp     edx, WM_PAINT
     je      .paint
+    cmp     edx, WM_KEYDOWN
+    je      .keydown
+    cmp     edx, WM_KEYUP
+    je      .keyup
+    cmp     edx, WM_SYSKEYDOWN
+    je      .keydown
+    cmp     edx, WM_SYSKEYUP
+    je      .keyup
 
     call    DefWindowProcA
+    add     rsp, 28h
+    ret
+
+.keydown:
+    lea     rax, [key_states]
+    mov     byte [rax + r8], 1
+    cmp     r8d, VK_BACK
+    je      .quit
+    xor     eax, eax
+    add     rsp, 28h
+    ret
+
+.keyup:
+    lea     rax, [key_states]
+    mov     byte [rax + r8], 0
+    xor     eax, eax
     add     rsp, 28h
     ret
 

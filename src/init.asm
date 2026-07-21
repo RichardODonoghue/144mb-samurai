@@ -57,8 +57,11 @@ init_palette:
     mov     dword [rdi + 28], 009D7CC0h
     add     rdi, 32
 
+    ; Entry 120: green marker (B=0, G=255, R=0)
+    mov     dword [rdi], 0000FF00h
+    add     rdi, 4
     ; Fill remaining with black
-    mov     ecx, 128
+    mov     ecx, 127
     xor     eax, eax
     rep     stosd
 

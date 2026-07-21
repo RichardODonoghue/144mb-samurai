@@ -12,9 +12,9 @@ section .data
     player_start_angle: db 0
 
     ; Movement params
-    move_speed:     dd 3.5
+    move_speed:     dd 0.04
     rot_speed:      dd 1.5
-    mouse_sens:     dd 0.3
+    mouse_sens:     dd 0.014
     angle_scale:    dd 40.743   ; 256 / (2*PI)
 
     ; Math constants
@@ -65,6 +65,9 @@ section .bss
     g_hinst:        resq 1
     g_dib:          resq 1
     g_bits:         resq 1
+
+    ; Key state tracking (set by WM_KEYDOWN, cleared by WM_KEYUP)
+    key_states:     resb 256
 
     ; BITMAPINFO (header + 256 palette entries)
     g_bmi:          resb 1064

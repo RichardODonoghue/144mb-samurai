@@ -28,6 +28,7 @@ extern GetClientRect
 extern BeginPaint
 extern EndPaint
 extern ShowCursor
+extern SetForegroundWindow
 
 ; ============================================================
 ; MODULE INCLUDES
@@ -152,6 +153,9 @@ main:
     mov     rcx, [g_hwnd]
     mov     edx, SW_SHOW
     call    ShowWindow
+
+    mov     rcx, [g_hwnd]
+    call    SetForegroundWindow
 
     mov     rcx, [g_hwnd]
     call    UpdateWindow

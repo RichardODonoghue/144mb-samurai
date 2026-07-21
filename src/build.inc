@@ -23,6 +23,10 @@ WM_DESTROY          equ 2
 WM_CLOSE            equ 10h
 WM_PAINT            equ 0Fh
 WM_SIZE             equ 5
+WM_KEYDOWN          equ 100h
+WM_KEYUP            equ 101h
+WM_SYSKEYDOWN       equ 104h
+WM_SYSKEYUP         equ 105h
 COLOR_WINDOW        equ 5
 
 ; Virtual keys
@@ -35,6 +39,7 @@ VK_ESCAPE   equ 1Bh
 VK_LBUTTON  equ 01h
 VK_RBUTTON  equ 02h
 VK_SHIFT    equ 10h
+VK_BACK     equ 08h
 
 ; BITMAPINFOHEADER offsets
 BISIZE           equ 0

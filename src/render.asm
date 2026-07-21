@@ -32,9 +32,9 @@ render_frame:
 
     ; Compute left/right ray angles
     mov     ecx, eax
-    add     cl, FOV_HALF               ; left = player + FOV/2
+    sub     cl, FOV_HALF               ; left  = player - FOV/2
     mov     edx, eax
-    sub     dl, FOV_HALF               ; right = player - FOV/2
+    add     dl, FOV_HALF               ; right = player + FOV/2
 
     ; Look up directions from sin/cos tables
     movzx   ecx, cl
@@ -249,6 +249,114 @@ render_frame:
     jmp     .col_loop
 
 .done:
+    ; ---- Draw green marker at player start position ----
+    movzx   eax, byte [player_angle]
+    movss   xmm8, [cos_table + rax*4]
+    movss   xmm9, [sin_table + rax*4]
+    ; dx = start_x - player_x, dy = start_y - player_y
+    movss   xmm0, [player_start_x]
+    subss   xmm0, xmm14                 ; xmm0 = dx
+    movss   xmm1, [player_start_y]
+    subss   xmm1, xmm15                 ; xmm1 = dy
+    ; forward = dx*cos + dy*sin
+    movaps  xmm10, xmm0
+    mulss   xmm10, xmm8
+    movaps  xmm11, xmm1
+    mulss   xmm11, xmm9
+    addss   xmm10, xmm11
+    pxor    xmm12, xmm12
+    comiss  xmm12, xmm10
+    jae     .no_marker                  ; skip if behind player
+    ; Clamp forward to minimum 0.01
+    mov     eax, 0x3C23D70A             ; 0.01f
+    movd    xmm12, eax
+    comiss  xmm12, xmm10
+    jbe     .fw_ok
+    movaps  xmm10, xmm12
+.fw_ok:
+    ; side = dy*cos - dx*sin
+    movaps  xmm11, xmm1
+    mulss   xmm11, xmm8
+    movaps  xmm12, xmm0
+    mulss   xmm12, xmm9
+    subss   xmm11, xmm12
+    ; screen_x = 160 + side/forward * 160
+    divss   xmm11, xmm10
+    mov     eax, 160
+    cvtsi2ss xmm12, eax
+    mulss   xmm11, xmm12
+    addss   xmm11, xmm12
+    cvttss2si r10d, xmm11
+    ; Clamp screen_x to [0, SCR_W-1]
+    cmp     r10d, 0
+    jge     .sx1
+    xor     r10d, r10d
+.sx1:
+    cmp     r10d, SCR_W - 1
+    jle     .sx2
+    mov     r10d, SCR_W - 1
+.sx2:
+    ; screen_y = 100 + 4/forward
+    mov     eax, 4
+    cvtsi2ss xmm11, eax
+    divss   xmm11, xmm10
+    mov     eax, 100
+    cvtsi2ss xmm12, eax
+    addss   xmm11, xmm12
+    cvttss2si r11d, xmm11
+    ; Clamp screen_y to [0, SCR_H-1]
+    cmp     r11d, 0
+    jge     .sy1
+    xor     r11d, r11d
+.sy1:
+    cmp     r11d, SCR_H - 1
+    jle     .sy2
+    mov     r11d, SCR_H - 1
+.sy2:
+    ; Bounds-clamp + draw 3x3 green square
+    lea     eax, [r10d - 1]
+    cmp     eax, 0
+    jge     .gx1
+    xor     eax, eax
+.gx1:
+    mov     r8d, eax
+    lea     eax, [r10d + 1]
+    cmp     eax, SCR_W - 1
+    jle     .gx2
+    mov     eax, SCR_W - 1
+.gx2:
+    mov     r9d, eax
+    lea     eax, [r11d - 1]
+    cmp     eax, 0
+    jge     .gy1
+    xor     eax, eax
+.gy1:
+    mov     r10d, eax
+    lea     eax, [r11d + 1]
+    cmp     eax, SCR_H - 1
+    jle     .gy2
+    mov     eax, SCR_H - 1
+.gy2:
+    mov     r11d, eax
+    mov     ecx, r10d
+.gy_loop:
+    cmp     ecx, r11d
+    jg      .no_marker
+    imul    edx, ecx, SCR_W
+    mov     eax, r8d
+.gx_loop:
+    cmp     eax, r9d
+    jg      .gnext_y
+    mov     esi, edx
+    add     esi, eax
+    mov     byte [r15 + rsi], 120
+    inc     eax
+    jmp     .gx_loop
+.gnext_y:
+    inc     ecx
+    jmp     .gy_loop
+.no_marker:
+
     add     rsp, 38h
     pop     rsi
     pop     rdi
