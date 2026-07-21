@@ -357,6 +357,309 @@ render_frame:
     jmp     .gy_loop
 .no_marker:
 
+    ; ================================================================
+    ; Curved katana — thinner, hilt perpendicular to blade base
+    ; ================================================================
+    ; Blade: Y=22..125, spine 135→185, edge 143→210, dy=103
+    mov     eax, 22
+    cvtsi2ss xmm0, eax               ; y_start
+    mov     ecx, 22                  ; y int
+    mov     eax, 103
+    cvtsi2ss xmm1, eax               ; dy
+    movss   xmm10, [float_one]
+    divss   xmm10, xmm1              ; inv_dy
+    mov     eax, 50
+    cvtsi2ss xmm2, eax               ; dxl=185-135
+    mov     eax, 67
+    cvtsi2ss xmm3, eax               ; dxr=210-143
+    mov     eax, 135
+    cvtsi2ss xmm4, eax               ; xl_base
+    mov     eax, 143
+    cvtsi2ss xmm5, eax               ; xr_base
+    mov     eax, -28
+    cvtsi2ss xmm6, eax               ; spine_curve
+    mov     eax, -8
+    cvtsi2ss xmm7, eax               ; edge_curve
+    mov     eax, -22
+    cvtsi2ss xmm8, eax
+    addss   xmm8, xmm0               ; y_offset=0
+
+.blade_loop:
+    cmp     ecx, 125
+    jg      .blade_done
+    movaps  xmm9, xmm8
+    mulss   xmm9, xmm10              ; t
+    movaps  xmm12, xmm9
+    mulss   xmm12, xmm9              ; t*t
+    movaps  xmm11, xmm9
+    subss   xmm11, xmm12             ; curve_f = t-t^2
+    ; spine_x
+    movaps  xmm13, xmm9
+    mulss   xmm13, xmm2
+    addss   xmm13, xmm4
+    movaps  xmm14, xmm11
+    mulss   xmm14, xmm6
+    addss   xmm13, xmm14
+    cvttss2si r8d, xmm13
+    ; edge_x
+    movaps  xmm14, xmm9
+    mulss   xmm14, xmm3
+    addss   xmm14, xmm5
+    movaps  xmm15, xmm11
+    mulss   xmm15, xmm7
+    addss   xmm14, xmm15
+    cvttss2si r9d, xmm14
+    cmp     r8d, 0
+    jge     .bxl
+    xor     r8d, r8d
+.bxl:
+    cmp     r9d, SCR_W - 1
+    jle     .bxr
+    mov     r9d, SCR_W - 1
+.bxr:
+    imul    r10d, ecx, SCR_W
+    mov     eax, r8d
+.bifill:
+    cmp     eax, r9d
+    jg      .biedge
+    mov     edx, r10d
+    add     edx, eax
+    mov     byte [r15 + rdx], 122
+    inc     eax
+    jmp     .bifill
+.biedge:
+    mov     eax, r9d
+    sub     eax, 1
+    cmp     eax, r8d
+    jl      .bnext
+    add     eax, r10d
+    mov     byte [r15 + rax], 123
+    mov     eax, r9d
+    sub     eax, 2
+    cmp     eax, r8d
+    jl      .bnext
+    add     eax, r10d
+    mov     byte [r15 + rax], 123
+.bnext:
+    addss   xmm8, [float_one]
+    inc     ecx
+    jmp     .blade_loop
+
+.blade_done:
+    ; Tsuba angled to match blade base: Y=125→128, X=185→178 (L), X=210→218 (R)
+    mov     ecx, 125
+    mov     eax, 125
+    cvtsi2ss xmm0, eax
+    mov     eax, 3
+    cvtsi2ss xmm1, eax               ; dy=3
+    mov     eax, -7
+    cvtsi2ss xmm2, eax
+    divss   xmm2, xmm1               ; slopeL = (178-185)/3 = -7/3
+    mov     eax, 8
+    cvtsi2ss xmm3, eax
+    divss   xmm3, xmm1               ; slopeR = (218-210)/3 = 8/3
+    mov     eax, 185
+    cvtsi2ss xmm4, eax
+    mov     eax, 210
+    cvtsi2ss xmm5, eax
+    mov     eax, -125
+    cvtsi2ss xmm8, eax
+    addss   xmm8, xmm0
+.tsuba_loop:
+    cmp     ecx, 128
+    jg      .tsuba_done
+    movaps  xmm9, xmm8
+    mulss   xmm9, xmm2
+    addss   xmm9, xmm4
+    cvttss2si r8d, xmm9
+    movaps  xmm9, xmm8
+    mulss   xmm9, xmm3
+    addss   xmm9, xmm5
+    cvttss2si r9d, xmm9
+    cmp     r8d, 0
+    jge     .tx
+    xor     r8d, r8d
+.tx:
+    cmp     r9d, SCR_W - 1
+    jle     .ty
+    mov     r9d, SCR_W - 1
+.ty:
+    imul    r10d, ecx, SCR_W
+    mov     eax, r8d
+.tsfill:
+    cmp     eax, r9d
+    jg      .tsnxt
+    mov     edx, r10d
+    add     edx, eax
+    mov     byte [r15 + rdx], 121
+    inc     eax
+    jmp     .tsfill
+.tsnxt:
+    addss   xmm8, [float_one]
+    inc     ecx
+    jmp     .tsuba_loop
+
+.tsuba_done:
+    ; Handle Y=128..170  XL=180→186  XR=210→215  (25→29px wide)
+    mov     ecx, 128
+    mov     eax, 128
+    cvtsi2ss xmm0, eax
+    mov     eax, 42
+    cvtsi2ss xmm1, eax
+    mov     eax, 6
+    cvtsi2ss xmm2, eax
+    divss   xmm2, xmm1               ; slopeL = 6/42
+    mov     eax, 5
+    cvtsi2ss xmm3, eax
+    divss   xmm3, xmm1               ; slopeR = 5/42
+    mov     eax, 180
+    cvtsi2ss xmm4, eax
+    mov     eax, 210
+    cvtsi2ss xmm5, eax
+    mov     eax, -128
+    cvtsi2ss xmm8, eax
+    addss   xmm8, xmm0
+.hloop:
+    cmp     ecx, 170
+    jg      .hdl_done
+    movaps  xmm9, xmm8
+    mulss   xmm9, xmm2
+    addss   xmm9, xmm4
+    cvttss2si r8d, xmm9
+    movaps  xmm9, xmm8
+    mulss   xmm9, xmm3
+    addss   xmm9, xmm5
+    cvttss2si r9d, xmm9
+    cmp     r8d, 0
+    jge     .hxl
+    xor     r8d, r8d
+.hxl:
+    cmp     r9d, SCR_W - 1
+    jle     .hxr
+    mov     r9d, SCR_W - 1
+.hxr:
+    imul    r10d, ecx, SCR_W
+    mov     eax, r8d
+.hdl_fill:
+    cmp     eax, r9d
+    jg      .hdl_next
+    mov     edx, r10d
+    add     edx, eax
+    test    ecx, 2
+    jz      .hcol
+    mov     byte [r15 + rdx], 121
+    jmp     .hcol_ok
+.hcol:
+    mov     byte [r15 + rdx], 124
+.hcol_ok:
+    inc     eax
+    jmp     .hdl_fill
+.hdl_next:
+    addss   xmm8, [float_one]
+    inc     ecx
+    jmp     .hloop
+
+.hdl_done:
+    ; ---- Right arm (from screen edge behind handle) ----
+    ; Y=115..135  XL=210→192  XR=315→308  (skin 125)
+    mov     ecx, 115
+    mov     eax, 115
+    cvtsi2ss xmm0, eax
+    mov     eax, 20
+    cvtsi2ss xmm1, eax               ; dy
+    mov     eax, -18
+    cvtsi2ss xmm2, eax
+    divss   xmm2, xmm1               ; slopeL
+    mov     eax, -7
+    cvtsi2ss xmm3, eax
+    divss   xmm3, xmm1               ; slopeR
+    mov     eax, 210
+    cvtsi2ss xmm4, eax
+    mov     eax, 315
+    cvtsi2ss xmm5, eax
+    mov     eax, -115
+    cvtsi2ss xmm8, eax
+    addss   xmm8, xmm0
+.arm_loop:
+    cmp     ecx, 135
+    jg      .arm_done
+    movaps  xmm9, xmm8
+    mulss   xmm9, xmm2
+    addss   xmm9, xmm4
+    cvttss2si r8d, xmm9
+    movaps  xmm9, xmm8
+    mulss   xmm9, xmm3
+    addss   xmm9, xmm5
+    cvttss2si r9d, xmm9
+    cmp     r8d, 0
+    jge     .axl
+    xor     r8d, r8d
+.axl:
+    cmp     r9d, SCR_W - 1
+    jle     .axr
+    mov     r9d, SCR_W - 1
+.axr:
+    imul    r10d, ecx, SCR_W
+    mov     eax, r8d
+.afill:
+    cmp     eax, r9d
+    jg      .anext
+    mov     edx, r10d
+    add     edx, eax
+    mov     byte [r15 + rdx], 125
+    inc     eax
+    jmp     .afill
+.anext:
+    addss   xmm8, [float_one]
+    inc     ecx
+    jmp     .arm_loop
+
+.arm_done:
+    ; ---- Hand on handle Y=136..150  X=178..216 ----
+    mov     ecx, 136
+.hand_loop:
+    cmp     ecx, 150
+    jg      .hand_done
+    imul    r10d, ecx, SCR_W
+    mov     eax, 178
+.fistfill:
+    cmp     eax, 216
+    jg      .handnext
+    mov     edx, r10d
+    add     edx, eax
+    mov     r11d, ecx
+    sub     r11d, 136
+    ; Top 2 rows: full fist cap
+    cmp     r11d, 2
+    jl      .fist_body
+    ; Bottom 2 rows: fist base
+    cmp     r11d, 12
+    jg      .fist_body
+    ; Middle 8 rows: fingers with gap
+    test    r11d, 1
+    jz      .fin_gap
+    cmp     eax, 190
+    jl      .fist_body
+    cmp     eax, 208
+    jg      .fist_body
+    mov     byte [r15 + rdx], 125
+    jmp     .fistcol_ok
+.fin_gap:
+    cmp     eax, 189
+    jne     .fistcol_ok
+    mov     byte [r15 + rdx], 121
+    jmp     .fistcol_ok
+.fist_body:
+    mov     byte [r15 + rdx], 126
+.fistcol_ok:
+    inc     eax
+    jmp     .fistfill
+.handnext:
+    inc     ecx
+    jmp     .hand_loop
+
+.hand_done:
+
     add     rsp, 38h
     pop     rsi
     pop     rdi

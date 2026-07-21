@@ -59,9 +59,21 @@ init_palette:
 
     ; Entry 120: green marker (B=0, G=255, R=0)
     mov     dword [rdi], 0000FF00h
-    add     rdi, 4
+    ; Entry 121: tsuba dark grey  (B=0x32, G=0x32, R=0x32)
+    mov     dword [rdi + 4], 00323232h
+    ; Entry 122: blade silver      (B=0xC0, G=0xC0, R=0xD0)
+    mov     dword [rdi + 8], 00D0C0C0h
+    ; Entry 123: blade edge shine  (B=0xF0, G=0xF0, R=0xFF)
+    mov     dword [rdi + 12], 00FFF0F0h
+    ; Entry 124: tsuka wrap brown  (B=0x0A, G=0x14, R=0x28)
+    mov     dword [rdi + 16], 0028140Ah
+    ; Entry 125: skin light         (B=0xA0, G=0xB4, R=0xDC)
+    mov     dword [rdi + 20], 00DCB4A0h
+    ; Entry 126: skin dark          (B=0x73, G=0x8C, R=0xB4)
+    mov     dword [rdi + 24], 00B48C73h
+    add     rdi, 28
     ; Fill remaining with black
-    mov     ecx, 127
+    mov     ecx, 121
     xor     eax, eax
     rep     stosd
 
