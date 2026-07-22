@@ -36,9 +36,11 @@ extern SetForegroundWindow
 %include "src/data.asm"
 %include "src/init.asm"
 %include "src/render.asm"
+%include "src/floor.asm"
 %include "src/input.asm"
 %include "src/wndproc.asm"
 %include "src/level.asm"
+%include "src/effects.asm"
 
 ; ============================================================
 ; ENTRY POINT & GAME LOOP
@@ -70,6 +72,8 @@ game_loop:
 .do_frame:
     call    process_input
     call    level_check_end
+    call    update_particles
+    call    animate_fire
     call    render_frame
     mov     rcx, [g_hwnd]
     xor     edx, edx

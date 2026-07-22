@@ -12,18 +12,36 @@ render_frame:
     push    r15
     push    rdi
     push    rsi
+    push    rbp
     sub     rsp, 38h
 
-    ; ---- Clear framebuffer ----
+    ; ---- Gradient clear: sky per-row gradient (y=0..99) ----
+    lea     rsi, [sky_gradient]
     mov     rdi, [g_bits]
     test    rdi, rdi
     jz      .done
-    mov     ecx, (SCR_W * SCR_H) / 2
-    mov     al, 8                       ; dark sky
+    xor     edx, edx               ; y = 0
+.sky_clear:
+    cmp     edx, SCR_H / 2
+    jae     .floor_clear
+    mov     al, [rsi + rdx]
+    mov     ecx, SCR_W
     rep     stosb
-    mov     ecx, (SCR_W * SCR_H) / 2
-    mov     al, 128                     ; dark floor
+    inc     edx
+    jmp     .sky_clear
+
+    ; ---- Gradient clear: floor per-row gradient (y=100..199) ----
+.floor_clear:
+    cmp     edx, SCR_H
+    jae     .clear_done
+    mov     eax, edx
+    sub     eax, SCR_H / 2
+    mov     al, [floor_gradient + rax]
+    mov     ecx, SCR_W
     rep     stosb
+    inc     edx
+    jmp     .floor_clear
+.clear_done:
 
     ; ---- Load player state ----
     movzx   eax, byte [player_angle]
@@ -62,17 +80,17 @@ render_frame:
 
     xor     r12d, r12d                 ; column = 0
     mov     r15, [g_bits]              ; framebuffer base
+    lea     rbp, [wall_bottom]         ; per-column wall end buffer
 
 .col_loop:
     cmp     r12d, SCR_W
-    jae     .done
+    jae     .post_draw
 
     ; Save rayDir for this column
     movaps  xmm10, xmm6                ; rayDirX
     movaps  xmm11, xmm7                ; rayDirY
 
     ; --- DDA Setup ---
-    ; mapX = floor(posX), mapY = floor(posY)
     cvttss2si eax, xmm14               ; eax = mapX
     cvttss2si edx, xmm15               ; edx = mapY
 
@@ -82,7 +100,7 @@ render_frame:
     movss   xmm9, [float_one]
     divss   xmm9, xmm11                ; deltaDistY = 1/rayDirY
 
-    ; Absolute values using temp registers
+    ; Absolute values
     movd    r8d, xmm8
     movd    r9d, xmm9
     and     r8d, 7FFFFFFFh
@@ -91,7 +109,6 @@ render_frame:
     movd    xmm9, r9d                  ; deltaDistY = abs
 
     ; Step direction and initial sideDist
-    ; X direction
     pxor    xmm12, xmm12
     comiss  xmm10, xmm12
     jb      .sx_neg
@@ -110,7 +127,6 @@ render_frame:
     mulss   xmm0, xmm8
     movaps  xmm2, xmm0                 ; sideDistX
 
-    ; Y direction
 .sy_calc:
     pxor    xmm12, xmm12
     comiss  xmm11, xmm12
@@ -133,12 +149,12 @@ render_frame:
     ; --- DDA Loop ---
 .dda_start:
     xor     ebx, ebx                   ; side flag
-    mov     ecx, 0                     ; step counter
+    xor     ecx, ecx                   ; step counter
 
 .dda_loop:
     inc     ecx
     cmp     ecx, MAX_DEPTH
-    jae     .next_col
+    jae     .no_hit
 
     comiss  xmm2, xmm3                ; compare sideDist
     jb      .step_x
@@ -154,13 +170,13 @@ render_frame:
 
 .check:
     cmp     eax, 0
-    jl      .next_col
+    jl      .no_hit
     cmp     eax, MAP_W
-    jge     .next_col
+    jge     .no_hit
     cmp     edx, 0
-    jl      .next_col
+    jl      .no_hit
     cmp     edx, MAP_H
-    jge     .next_col
+    jge     .no_hit
 
     imul    edi, edx, MAP_W
     add     edi, eax
@@ -168,8 +184,8 @@ render_frame:
     test    edi, edi
     jz      .dda_loop
 
-    ; Save wall type for colour lookup
-    mov     r8d, edi
+    ; Save wall type on stack (r13 used for stepX in perp calc below)
+    mov     [rsp + 16], edi
 
     ; --- Wall hit: calculate perpWallDist ---
     test    ebx, ebx
@@ -178,7 +194,7 @@ render_frame:
     cvtsi2ss xmm0, eax
     subss   xmm0, xmm14
     mov     eax, 1
-    sub     eax, r13d
+    sub     eax, r13d                   ; uses stepX
     cvtsi2ss xmm1, eax
     mov     dword [rsp], 0x3F000000   ; 0.5f
     mulss   xmm1, [rsp]
@@ -189,58 +205,243 @@ render_frame:
     cvtsi2ss xmm0, edx
     subss   xmm0, xmm15
     mov     edx, 1
-    sub     edx, r14d
+    sub     edx, r14d                   ; uses stepY
     cvtsi2ss xmm1, edx
     mov     dword [rsp], 0x3F000000
     mulss   xmm1, [rsp]
     addss   xmm0, xmm1
     divss   xmm0, xmm11               ; perpWallDist
 
-    ; --- Draw wall slice ---
+    ; --- Compute distance bucket for shading ---
 .wall_draw:
+    mov     r13d, [rsp + 16]            ; wall_type (now safe, perp calc done)
+
+    ; xmm0 = perpWallDist
+    cvttss2si r9d, xmm0               ; int distance
+    cmp     r9d, MAX_DIST_BUCKET
+    jle     .db_ok
+    mov     r9d, MAX_DIST_BUCKET
+.db_ok:
+    mov     [rsp + 4], r9d             ; save distance bucket (for fog check)
+    movzx   r8d, byte [shade_table + r9d]  ; shade_offset 0-7
+
+    ; --- Compute lineHeight, drawStart, drawEnd ---
     mov     dword [rsp], SCR_H
     cvtsi2ss xmm1, dword [rsp]
-    divss   xmm1, xmm0                ; lineHeight = SCR_H / perpWallDist
-    cvttss2si ebp, xmm1
+    divss   xmm1, xmm0                ; lineHeight
+    cvttss2si eax, xmm1
+    mov     [rsp + 8], eax             ; save lineHeight for step calc
 
-    ; drawStart
-    mov     eax, ebp
-    neg     eax
-    sar     eax, 1
-    add     eax, SCR_H / 2
-    cmp     eax, 0
+    ; drawStart = -lineHeight/2 + SCR_H/2
+    mov     edx, eax
+    neg     edx
+    sar     edx, 1
+    add     edx, SCR_H / 2
+    cmp     edx, 0
     jge     .ds_ok
-    xor     eax, eax
+    xor     edx, edx
 .ds_ok:
-    mov     esi, eax
+    mov     esi, edx                    ; drawStart in esi
 
-    ; drawEnd
-    mov     eax, ebp
-    sar     eax, 1
-    add     eax, SCR_H / 2
-    cmp     eax, SCR_H - 1
+    ; drawEnd = lineHeight/2 + SCR_H/2
+    mov     edx, eax
+    sar     edx, 1
+    add     edx, SCR_H / 2
+    cmp     edx, SCR_H - 1
     jle     .de_ok
-    mov     eax, SCR_H - 1
+    mov     edx, SCR_H - 1
 .de_ok:
-    mov     edi, eax
+    mov     edi, edx                    ; drawEnd in edi
+    mov     word [rbp + r12*2], dx     ; store for floor casting
 
-    ; wall colour: base = 96 + (type-1)*8, Y-side += 4 darker
-    mov     r9d, r8d
-    dec     r9d                         ; type - 1
-    imul    r9d, r9d, 8                 ; (type-1) * 8
-    add     r9d, 96                     ; base palette index
+    ; Save side flag
+    mov     r14d, ebx
+
+    ; wallX = fractional hit position
     test    ebx, ebx
-    jz      .draw_col
-    add     r9d, 4                      ; Y-side: darker shade
+    jnz     .wx_y
+    movaps  xmm1, xmm0
+    mulss   xmm1, xmm11
+    addss   xmm1, xmm15
+    jmp     .wx_done
+.wx_y:
+    movaps  xmm1, xmm0
+    mulss   xmm1, xmm10
+    addss   xmm1, xmm14
+.wx_done:
+    cvttss2si eax, xmm1
+    cvtsi2ss xmm2, eax
+    subss   xmm1, xmm2
+    mov     eax, TEX_W
+    cvtsi2ss xmm2, eax
+    mulss   xmm1, xmm2
+    cvttss2si r11d, xmm1               ; texX (0..31)
+    and     r11d, TEX_W - 1
+
+    ; Base palette = PAL_WALL_BASE + (type-1) * PAL_WALL_STRIDE
+    mov     r9d, r13d
+    dec     r9d
+    imul    r9d, r9d, PAL_WALL_STRIDE
+    add     r9d, PAL_WALL_BASE
+
+    ; Select texture pointer by wall type
+    mov     eax, r13d
+    movzx   r10d, byte [tex_type_map + rax - 1]
+    imul    r10d, TEX_SIZE
+    lea     r10, [tex_brick + r10]
+
+    ; Texture step (16.16 fixed): TEX_H<<16 / lineHeight
+    mov     eax, TEX_H << 16
+    xor     edx, edx
+    div     dword [rsp + 8]            ; lineHeight
+    mov     ebx, eax                   ; step in ebx
+
+    ; texPos accumulator
+    xor     edx, edx
+    mov     [rsp + 12], esi            ; save drawStart for roof rendering
 
 .draw_col:
-    cmp     esi, edi
-    jg      .next_col
-    imul    r10d, esi, SCR_W
-    add     r10d, r12d
-    mov     byte [r15 + r10], r9b
+    cmp     esi, edi                   ; drawStart vs drawEnd
+    jg      .post_wall
+    mov     eax, edx
+    shr     eax, 16                    ; texY
+    and     eax, TEX_H - 1
+    shl     eax, 5                     ; texY * TEX_W
+    add     eax, r11d                  ; + texX
+    movzx   eax, byte [r10 + rax]      ; texel (0-7)
+
+    ; Apply distance shade: texel = max(0, texel - shade_offset)
+    sub     eax, r8d
+    jns     .ts_ok
+    xor     eax, eax
+.ts_ok:
+
+    ; Fog: if distance bucket >= FOG_BEGIN, force to fog color
+    cmp     dword [rsp + 4], FOG_BEGIN
+    jb      .no_fog
+    mov     eax, [rsp + 4]
+    sub     eax, FOG_BEGIN
+    shr     eax, 1                     ; 0..15 fog level
+    add     eax, PAL_FOG_START
+    jmp     .store_pixel
+.no_fog:
+
+    ; Add base palette
+    add     eax, r9d
+
+    ; Y-side darkening
+    test    r14d, r14d
+    jz      .store_pixel
+    add     eax, TEX_SIDE_SHIFT
+
+.store_pixel:
+    imul    ecx, esi, SCR_W
+    add     ecx, r12d
+    mov     byte [r15 + rcx], al
+    add     edx, ebx                   ; texPos += step
     inc     esi
     jmp     .draw_col
+
+.post_wall:
+    ; ================================================================
+    ; ROOF RENDERING: Japanese curved tile roof above building walls
+    ; ================================================================
+    cmp     r13d, 2                    ; stone (castle wall) = no roof
+    je      .foundation
+    cmp     r13d, 6                    ; fire = no roof
+    je      .foundation
+
+    ; Skip roof for distant walls (looks wrong if roof is huge vs wall)
+    cmp     dword [rsp + 4], ROOF_DIST_LIMIT
+    ja      .foundation
+
+    ; Compute roof height: roof_profile[wallX] * roof_type_height[type-1] / MAX_ROOF_H
+    movzx   eax, byte [roof_profile + r11d]   ; base profile height (0..~20)
+    movzx   ecx, byte [roof_type_height + r13d - 1]
+    mul     ecx
+    mov     ecx, MAX_ROOF_H
+    xor     edx, edx
+    div     ecx                               ; eax = roofH in rows
+    test    eax, eax
+    jz      .foundation
+
+    mov     r8d, eax                          ; roofH (rows)
+
+    ; Roof start = drawStart - roofH
+    mov     ecx, [rsp + 12]                   ; drawStart
+    sub     ecx, r8d                          ; roofStart
+
+.roof_row:
+    cmp     ecx, [rsp + 12]                   ; reached drawStart?
+    jae     .foundation
+    cmp     ecx, 0
+    jl      .roof_skip_row                    ; off-screen above
+
+    imul    edx, ecx, SCR_W
+    add     edx, r12d                         ; pixel offset = y*SCR_W + col
+
+    ; Distance from roof bottom = drawStart - currentY
+    mov     eax, [rsp + 12]
+    sub     eax, ecx
+
+    ; Bottom 2 rows = eave shadow
+    cmp     eax, 2
+    jae     .roof_tile
+    mov     al, PAL_ROOF_EAVE
+    jmp     .roof_store
+
+.roof_tile:
+    ; Checkerboard tile pattern: (col + row) & 1
+    lea     eax, [ecx + r12d]
+    and     eax, 1
+    add     eax, PAL_ROOF_TILE_1              ; 248 or 249
+
+    ; Eave curl highlight: near wallX edges (0-3 or 28-31)
+    cmp     r11d, 4
+    jae     .chk_curl_r
+    mov     eax, PAL_EAVE_CURL                ; left curled eave corner
+    jmp     .roof_store
+.chk_curl_r:
+    cmp     r11d, 28
+    jb      .roof_store
+    mov     eax, PAL_EAVE_CURL                ; right curled eave corner
+
+.roof_store:
+    mov     byte [r15 + rdx], al
+
+.roof_skip_row:
+    inc     ecx
+    jmp     .roof_row
+
+.foundation:
+    ; ================================================================
+    ; FOUNDATION BAND: dark stone band at bottom of building walls
+    ; ================================================================
+    cmp     r13d, 2                    ; stone walls = no foundation band
+    je      .next_col
+    cmp     r13d, 6                    ; fire walls = no foundation
+    je      .next_col
+    cmp     edi, SCR_H / 2             ; only if wall extends below horizon
+    jl      .next_col
+
+    ; Foundation: overwrite bottom FOUNDATION_ROWS of the wall
+    mov     ecx, edi
+    sub     ecx, FOUNDATION_ROWS - 1       ; start near bottom
+    cmp     ecx, 0
+    jge     .found_adj
+    xor     ecx, ecx
+.found_adj:
+.found_row:
+    cmp     ecx, edi                    ; up to drawEnd inclusive
+    jg      .next_col
+    cmp     ecx, 0
+    jl      .found_next
+    imul    edx, ecx, SCR_W
+    add     edx, r12d
+    mov     byte [r15 + rdx], PAL_FOUNDATION
+.found_next:
+    inc     ecx
+    jmp     .found_row
 
 .next_col:
     addss   xmm6, xmm4                 ; rayDirX += stepX
@@ -248,118 +449,35 @@ render_frame:
     inc     r12d
     jmp     .col_loop
 
-.done:
-    ; ---- Draw green marker at player start position ----
-    movzx   eax, byte [player_angle]
-    movss   xmm8, [cos_table + rax*4]
-    movss   xmm9, [sin_table + rax*4]
-    ; dx = start_x - player_x, dy = start_y - player_y
-    movss   xmm0, [player_start_x]
-    subss   xmm0, xmm14                 ; xmm0 = dx
-    movss   xmm1, [player_start_y]
-    subss   xmm1, xmm15                 ; xmm1 = dy
-    ; forward = dx*cos + dy*sin
-    movaps  xmm10, xmm0
-    mulss   xmm10, xmm8
-    movaps  xmm11, xmm1
-    mulss   xmm11, xmm9
-    addss   xmm10, xmm11
-    pxor    xmm12, xmm12
-    comiss  xmm12, xmm10
-    jae     .no_marker                  ; skip if behind player
-    ; Clamp forward to minimum 0.01
-    mov     eax, 0x3C23D70A             ; 0.01f
-    movd    xmm12, eax
-    comiss  xmm12, xmm10
-    jbe     .fw_ok
-    movaps  xmm10, xmm12
-.fw_ok:
-    ; side = dy*cos - dx*sin
-    movaps  xmm11, xmm1
-    mulss   xmm11, xmm8
-    movaps  xmm12, xmm0
-    mulss   xmm12, xmm9
-    subss   xmm11, xmm12
-    ; screen_x = 160 + side/forward * 160
-    divss   xmm11, xmm10
-    mov     eax, 160
-    cvtsi2ss xmm12, eax
-    mulss   xmm11, xmm12
-    addss   xmm11, xmm12
-    cvttss2si r10d, xmm11
-    ; Clamp screen_x to [0, SCR_W-1]
-    cmp     r10d, 0
-    jge     .sx1
-    xor     r10d, r10d
-.sx1:
-    cmp     r10d, SCR_W - 1
-    jle     .sx2
-    mov     r10d, SCR_W - 1
-.sx2:
-    ; screen_y = 100 + 4/forward
-    mov     eax, 4
-    cvtsi2ss xmm11, eax
-    divss   xmm11, xmm10
-    mov     eax, 100
-    cvtsi2ss xmm12, eax
-    addss   xmm11, xmm12
-    cvttss2si r11d, xmm11
-    ; Clamp screen_y to [0, SCR_H-1]
-    cmp     r11d, 0
-    jge     .sy1
-    xor     r11d, r11d
-.sy1:
-    cmp     r11d, SCR_H - 1
-    jle     .sy2
-    mov     r11d, SCR_H - 1
-.sy2:
-    ; Bounds-clamp + draw 3x3 green square
-    lea     eax, [r10d - 1]
-    cmp     eax, 0
-    jge     .gx1
-    xor     eax, eax
-.gx1:
-    mov     r8d, eax
-    lea     eax, [r10d + 1]
-    cmp     eax, SCR_W - 1
-    jle     .gx2
-    mov     eax, SCR_W - 1
-.gx2:
-    mov     r9d, eax
-    lea     eax, [r11d - 1]
-    cmp     eax, 0
-    jge     .gy1
-    xor     eax, eax
-.gy1:
-    mov     r10d, eax
-    lea     eax, [r11d + 1]
-    cmp     eax, SCR_H - 1
-    jle     .gy2
-    mov     eax, SCR_H - 1
-.gy2:
-    mov     r11d, eax
-    mov     ecx, r10d
-.gy_loop:
-    cmp     ecx, r11d
-    jg      .no_marker
-    imul    edx, ecx, SCR_W
-    mov     eax, r8d
-.gx_loop:
-    cmp     eax, r9d
-    jg      .gnext_y
-    mov     esi, edx
-    add     esi, eax
-    mov     byte [r15 + rsi], 120
-    inc     eax
-    jmp     .gx_loop
-.gnext_y:
-    inc     ecx
-    jmp     .gy_loop
-.no_marker:
+.no_hit:
+    ; No wall hit: store 0 as drawEnd (floor renders from SCR_H/2)
+    mov     word [rbp + r12*2], 0
+    jmp     .next_col
 
-    ; ================================================================
-    ; Curved katana — thinner, hilt perpendicular to blade base
-    ; ================================================================
+    ; ---- Post-draw: floor, particles, weapon, vignette ----
+.post_draw:
+    call    render_floor
+    call    draw_particles
+    call    draw_katana
+    call    apply_vignette
+
+.done:
+    add     rsp, 38h
+    pop     rbp
+    pop     rsi
+    pop     rdi
+    pop     r15
+    pop     r14
+    pop     r13
+    pop     r12
+    pop     rbx
+    ret
+
+; ================================================================
+; draw_katana -- curved katana weapon overlay
+; (extracted from old render_frame end section)
+; ================================================================
+draw_katana:
     ; Blade: Y=22..125, spine 135→185, edge 143→210, dy=103
     mov     eax, 22
     cvtsi2ss xmm0, eax               ; y_start
@@ -424,7 +542,7 @@ render_frame:
     jg      .biedge
     mov     edx, r10d
     add     edx, eax
-    mov     byte [r15 + rdx], 122
+    mov     byte [r15 + rdx], PAL_WEAPON_BLADE
     inc     eax
     jmp     .bifill
 .biedge:
@@ -433,20 +551,20 @@ render_frame:
     cmp     eax, r8d
     jl      .bnext
     add     eax, r10d
-    mov     byte [r15 + rax], 123
+    mov     byte [r15 + rax], PAL_WEAPON_SHINE
     mov     eax, r9d
     sub     eax, 2
     cmp     eax, r8d
     jl      .bnext
     add     eax, r10d
-    mov     byte [r15 + rax], 123
+    mov     byte [r15 + rax], PAL_WEAPON_SHINE
 .bnext:
     addss   xmm8, [float_one]
     inc     ecx
     jmp     .blade_loop
 
 .blade_done:
-    ; Tsuba angled to match blade base: Y=125→128, X=185→178 (L), X=210→218 (R)
+    ; Tsuba angled: Y=125→128, X=185→178 (L), X=210→218 (R)
     mov     ecx, 125
     mov     eax, 125
     cvtsi2ss xmm0, eax
@@ -454,10 +572,10 @@ render_frame:
     cvtsi2ss xmm1, eax               ; dy=3
     mov     eax, -7
     cvtsi2ss xmm2, eax
-    divss   xmm2, xmm1               ; slopeL = (178-185)/3 = -7/3
+    divss   xmm2, xmm1               ; slopeL = -7/3
     mov     eax, 8
     cvtsi2ss xmm3, eax
-    divss   xmm3, xmm1               ; slopeR = (218-210)/3 = 8/3
+    divss   xmm3, xmm1               ; slopeR = 8/3
     mov     eax, 185
     cvtsi2ss xmm4, eax
     mov     eax, 210
@@ -491,7 +609,7 @@ render_frame:
     jg      .tsnxt
     mov     edx, r10d
     add     edx, eax
-    mov     byte [r15 + rdx], 121
+    mov     byte [r15 + rdx], PAL_WEAPON_TSUBA
     inc     eax
     jmp     .tsfill
 .tsnxt:
@@ -500,7 +618,7 @@ render_frame:
     jmp     .tsuba_loop
 
 .tsuba_done:
-    ; Handle Y=128..170  XL=180→186  XR=210→215  (25→29px wide)
+    ; Handle Y=128..170  XL=180→186  XR=210→215
     mov     ecx, 128
     mov     eax, 128
     cvtsi2ss xmm0, eax
@@ -508,10 +626,10 @@ render_frame:
     cvtsi2ss xmm1, eax
     mov     eax, 6
     cvtsi2ss xmm2, eax
-    divss   xmm2, xmm1               ; slopeL = 6/42
+    divss   xmm2, xmm1
     mov     eax, 5
     cvtsi2ss xmm3, eax
-    divss   xmm3, xmm1               ; slopeR = 5/42
+    divss   xmm3, xmm1
     mov     eax, 180
     cvtsi2ss xmm4, eax
     mov     eax, 210
@@ -547,10 +665,10 @@ render_frame:
     add     edx, eax
     test    ecx, 2
     jz      .hcol
-    mov     byte [r15 + rdx], 121
+    mov     byte [r15 + rdx], PAL_WEAPON_TSUBA
     jmp     .hcol_ok
 .hcol:
-    mov     byte [r15 + rdx], 124
+    mov     byte [r15 + rdx], PAL_WEAPON_WRAP
 .hcol_ok:
     inc     eax
     jmp     .hdl_fill
@@ -560,19 +678,18 @@ render_frame:
     jmp     .hloop
 
 .hdl_done:
-    ; ---- Right arm (from screen edge behind handle) ----
-    ; Y=115..135  XL=210→192  XR=315→308  (skin 125)
+    ; Right arm Y=115..135  XL=210→192  XR=315→308
     mov     ecx, 115
     mov     eax, 115
     cvtsi2ss xmm0, eax
     mov     eax, 20
-    cvtsi2ss xmm1, eax               ; dy
+    cvtsi2ss xmm1, eax
     mov     eax, -18
     cvtsi2ss xmm2, eax
-    divss   xmm2, xmm1               ; slopeL
+    divss   xmm2, xmm1
     mov     eax, -7
     cvtsi2ss xmm3, eax
-    divss   xmm3, xmm1               ; slopeR
+    divss   xmm3, xmm1
     mov     eax, 210
     cvtsi2ss xmm4, eax
     mov     eax, 315
@@ -606,7 +723,7 @@ render_frame:
     jg      .anext
     mov     edx, r10d
     add     edx, eax
-    mov     byte [r15 + rdx], 125
+    mov     byte [r15 + rdx], PAL_WEAPON_SKIN_L
     inc     eax
     jmp     .afill
 .anext:
@@ -615,7 +732,7 @@ render_frame:
     jmp     .arm_loop
 
 .arm_done:
-    ; ---- Hand on handle Y=136..150  X=178..216 ----
+    ; Hand on handle Y=136..150  X=178..216
     mov     ecx, 136
 .hand_loop:
     cmp     ecx, 150
@@ -629,28 +746,25 @@ render_frame:
     add     edx, eax
     mov     r11d, ecx
     sub     r11d, 136
-    ; Top 2 rows: full fist cap
     cmp     r11d, 2
     jl      .fist_body
-    ; Bottom 2 rows: fist base
     cmp     r11d, 12
     jg      .fist_body
-    ; Middle 8 rows: fingers with gap
     test    r11d, 1
     jz      .fin_gap
     cmp     eax, 190
     jl      .fist_body
     cmp     eax, 208
     jg      .fist_body
-    mov     byte [r15 + rdx], 125
+    mov     byte [r15 + rdx], PAL_WEAPON_SKIN_L
     jmp     .fistcol_ok
 .fin_gap:
     cmp     eax, 189
     jne     .fistcol_ok
-    mov     byte [r15 + rdx], 121
+    mov     byte [r15 + rdx], PAL_WEAPON_TSUBA
     jmp     .fistcol_ok
 .fist_body:
-    mov     byte [r15 + rdx], 126
+    mov     byte [r15 + rdx], PAL_WEAPON_SKIN_D
 .fistcol_ok:
     inc     eax
     jmp     .fistfill
@@ -659,13 +773,29 @@ render_frame:
     jmp     .hand_loop
 
 .hand_done:
+    ret
 
-    add     rsp, 38h
-    pop     rsi
-    pop     rdi
-    pop     r15
-    pop     r14
-    pop     r13
-    pop     r12
-    pop     rbx
+; ================================================================
+; apply_vignette -- post-process vignette using precomputed LUT
+; ================================================================
+apply_vignette:
+    lea     rsi, [vignette_mask]
+    mov     rdi, [g_bits]
+    test    rdi, rdi
+    jz      .vig_done
+    lea     rbx, [vignette_lut]
+    mov     ecx, SCR_W * SCR_H
+.vig_loop:
+    movzx   eax, byte [rsi]        ; vignette mask value (0=no, 1=apply)
+    test    al, al
+    jz      .vig_next
+    movzx   eax, byte [rdi]        ; current pixel
+    mov     al, [rbx + rax]        ; lookup dimmed version
+    mov     [rdi], al
+.vig_next:
+    inc     rsi
+    inc     rdi
+    dec     ecx
+    jnz     .vig_loop
+.vig_done:
     ret

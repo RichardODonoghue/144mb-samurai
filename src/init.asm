@@ -6,97 +6,132 @@ section .text
 init_palette:
     lea     rdi, [g_bmi + BMICOLORS_OFFSET]
 
+    ; --- Sky gradient: 64 entries, dark purple -> bright purple ---
     xor     ecx, ecx
 .sky:
     movzx   eax, cl
-    shl     eax, 1
-    add     eax, 30
+    shl     eax, 2               ; sky ramp: 0..252
+    add     eax, 4
     cmp     eax, 255
     jbe     .s1
     mov     eax, 255
 .s1:
-    mov     byte [rdi], al
-    mov     byte [rdi + 2], al
-    mov     byte [rdi + 1], 0
+    mov     byte [rdi], al       ; Blue
+    mov     byte [rdi + 2], al   ; Red
+    mov     byte [rdi + 1], 0    ; Green
+    mov     byte [rdi + 3], 0    ; Reserved
+    add     rdi, 4
+    inc     ecx
+    cmp     ecx, PAL_SKY_COUNT
+    jb      .sky
+
+    ; --- Floor dirt palette (64-79): 8 light + 8 dark ---
+    lea     rsi, [pal_floor_dirt_x]
+    mov     ecx, 8
+    rep     movsd
+    lea     rsi, [pal_floor_dirt_y]
+    mov     ecx, 8
+    rep     movsd
+
+    ; --- Brick walls (80-95) ---
+    lea     rsi, [pal_brick_x]
+    mov     ecx, 8
+    rep     movsd
+    lea     rsi, [pal_brick_y]
+    mov     ecx, 8
+    rep     movsd
+
+    ; --- Stone walls (96-111) ---
+    lea     rsi, [pal_stone_x]
+    mov     ecx, 8
+    rep     movsd
+    lea     rsi, [pal_stone_y]
+    mov     ecx, 8
+    rep     movsd
+
+    ; --- Wood shop walls (112-127) ---
+    lea     rsi, [pal_wood_x]
+    mov     ecx, 8
+    rep     movsd
+    lea     rsi, [pal_wood_y]
+    mov     ecx, 8
+    rep     movsd
+
+    ; --- Burnt wood walls (128-143) ---
+    lea     rsi, [pal_burnt_x]
+    mov     ecx, 8
+    rep     movsd
+    lea     rsi, [pal_burnt_y]
+    mov     ecx, 8
+    rep     movsd
+
+    ; --- Fire walls (144-159) ---
+    lea     rsi, [pal_fire_x]
+    mov     ecx, 8
+    rep     movsd
+    lea     rsi, [pal_fire_y]
+    mov     ecx, 8
+    rep     movsd
+
+    ; --- Floor wood palette (160-175): 8 light + 8 dark ---
+    lea     rsi, [pal_floor_wood_x]
+    mov     ecx, 8
+    rep     movsd
+    lea     rsi, [pal_floor_wood_y]
+    mov     ecx, 8
+    rep     movsd
+
+    ; --- Weapon/skin palette (176-183): 8 entries ---
+    lea     rsi, [pal_weapon]
+    mov     ecx, 8
+    rep     movsd
+
+    ; --- Fire animation entries (184-187) ---
+    lea     rsi, [fire_cycle0]
+    mov     ecx, 4
+    rep     movsd
+
+    ; --- Particle/ash entries (188-191): dimmed fire + ash ---
+    mov     dword [rdi],      00FFB450h   ; bright fire ember
+    mov     dword [rdi + 4],  0064280Ah   ; dark red ember
+    mov     dword [rdi + 8],  00A09890h   ; smoke/ash grey
+    mov     dword [rdi + 12], 00303030h   ; dark ash
+    add     rdi, 16
+
+    ; --- Fog ramp (192-223): 32 entries ---
+    lea     rsi, [pal_fog]
+    mov     ecx, 32
+    rep     movsd
+
+    ; --- Vignette dark ramp (224-247): 24 entries ---
+    ; Progressive darkening for vignette: purple-black gradient
+    xor     ecx, ecx
+.vig:
+    movzx   eax, cl
+    mov     edx, 120
+    sub     edx, eax
+    imul    edx, 120
+    shr     edx, 7
+    mov     ebx, edx               ; R = scaled
+    shr     edx, 1                 ; G = half
+    mov     byte [rdi], bl         ; B = scaled
+    mov     byte [rdi + 1], dl     ; G
+    mov     byte [rdi + 2], bl     ; R
     mov     byte [rdi + 3], 0
     add     rdi, 4
     inc     ecx
-    cmp     ecx, 96
-    jb      .sky
+    cmp     ecx, 24
+    jb      .vig
 
-    ; Brick (type 1)
-    mov     dword [rdi],      004028A0h
-    mov     dword [rdi + 4],  004830B0h
-    mov     dword [rdi + 8],  005038C0h
-    mov     dword [rdi + 12], 006040D0h
-    mov     dword [rdi + 16], 007048E0h
-    mov     dword [rdi + 20], 008050F0h
-    mov     dword [rdi + 24], 009058FFh
-    mov     dword [rdi + 28], 00B060FFh
-    add     rdi, 32
-
-    ; Stone (type 2)
-    mov     dword [rdi],      00505050h
-    mov     dword [rdi + 4],  00606060h
-    mov     dword [rdi + 8],  00707070h
-    mov     dword [rdi + 12], 00808080h
-    mov     dword [rdi + 16], 00909090h
-    mov     dword [rdi + 20], 00A0A0A0h
-    mov     dword [rdi + 24], 00B0B0B0h
-    mov     dword [rdi + 28], 00C0C0C0h
-    add     rdi, 32
-
-    ; Wood (type 3)
-    mov     dword [rdi],      002D1A50h
-    mov     dword [rdi + 4],  003D2860h
-    mov     dword [rdi + 8],  004D3670h
-    mov     dword [rdi + 12], 005D4480h
-    mov     dword [rdi + 16], 006D5290h
-    mov     dword [rdi + 20], 007D60A0h
-    mov     dword [rdi + 24], 008D6EB0h
-    mov     dword [rdi + 28], 009D7CC0h
-    add     rdi, 32
-
-    ; Entry 120: green marker (B=0, G=255, R=0)
-    mov     dword [rdi], 0000FF00h
-    ; Entry 121: tsuba dark grey  (B=0x32, G=0x32, R=0x32)
-    mov     dword [rdi + 4], 00323232h
-    ; Entry 122: blade silver      (B=0xC0, G=0xC0, R=0xD0)
-    mov     dword [rdi + 8], 00D0C0C0h
-    ; Entry 123: blade edge shine  (B=0xF0, G=0xF0, R=0xFF)
-    mov     dword [rdi + 12], 00FFF0F0h
-    ; Entry 124: tsuka wrap brown  (B=0x0A, G=0x14, R=0x28)
-    mov     dword [rdi + 16], 0028140Ah
-    ; Entry 125: skin light         (B=0xA0, G=0xB4, R=0xDC)
-    mov     dword [rdi + 20], 00DCB4A0h
-    ; Entry 126: skin dark          (B=0x73, G=0x8C, R=0xB4)
-    mov     dword [rdi + 24], 00B48C73h
-    add     rdi, 28                    ; rdi -> entry 127
-    ; Entry 127: black padding
-    mov     dword [rdi], 0
-    ; Entries 128-135: burnt wood walls (type 5, 4 light + 4 dark)
-    mov     dword [rdi + 4],  0046321Eh
-    mov     dword [rdi + 8],  00372616h
-    mov     dword [rdi + 12], 0028190Eh
-    mov     dword [rdi + 16], 00190F08h
-    mov     dword [rdi + 20], 00322314h
-    mov     dword [rdi + 24], 0023160Ch
-    mov     dword [rdi + 28], 00160C06h
-    mov     dword [rdi + 32], 000C0603h
-    ; Entries 136-143: fire walls (type 6, 4 bright + 4 dark)
-    mov     dword [rdi + 36], 00FFE63Ch
-    mov     dword [rdi + 40], 00FF8C14h
-    mov     dword [rdi + 44], 00DC280Ah
-    mov     dword [rdi + 48], 00FFB450h
-    mov     dword [rdi + 52], 00961405h
-    mov     dword [rdi + 56], 00640A02h
-    mov     dword [rdi + 60], 003C0501h
-    mov     dword [rdi + 64], 001E0200h
-    add     rdi, 68                    ; rdi -> entry 144
-    ; Fill entries 144-247 with black
-    mov     ecx, 104
-    xor     eax, eax
-    rep     stosd
+    ; --- Roof and foundation palette (248-255): 8 entries ---
+    mov     dword [rdi],      0040302Ah   ; 248: dark blue-grey tile
+    mov     dword [rdi + 4],  0050403Ah   ; 249: lighter tile
+    mov     dword [rdi + 8],  00685850h   ; 250: ridge highlight
+    mov     dword [rdi + 12], 00181410h   ; 251: eave shadow (near black)
+    mov     dword [rdi + 16], 00484040h   ; 252: foundation dark stone
+    mov     dword [rdi + 20], 0050604Ah   ; 253: eave curl highlight
+    mov     dword [rdi + 24], 0           ; 254: black
+    mov     dword [rdi + 28], 0           ; 255: black
 
     ret
 
@@ -137,6 +172,42 @@ init_dib:
     call    ReleaseDC
 
     call    init_palette
+    call    init_vignette
 
     add     rsp, 38h
+    ret
+
+; ============================================================
+; init_vignette -- decompress RLE vignette into vignette_mask
+; ============================================================
+init_vignette:
+    lea     rsi, [vignette_rle]
+    lea     rdi, [vignette_mask]
+    ; End of RLE data = vignette_rle + vignette_rle_len
+    mov     r10d, [vignette_rle_len]
+    lea     r10, [rsi + r10]           ; end of RLE data pointer
+    mov     r8d, [vignette_full_len]   ; target bytes to produce
+    xor     r9d, r9d                    ; bytes emitted
+    xor     eax, eax
+.vloop:
+    ; Need at least 2 bytes for next entry
+    lea     r11, [rsi + 2]
+    cmp     r11, r10
+    ja      .vig_done                   ; past end of data
+    cmp     r9d, r8d
+    jae     .vig_done                   ; emitted enough
+    movzx   ecx, byte [rsi]             ; count
+    movzx   eax, byte [rsi + 1]         ; value
+    add     rsi, 2
+    ; Clamp to remaining bytes
+    mov     r11d, r8d
+    sub     r11d, r9d
+    cmp     ecx, r11d
+    jbe     .vc_ok
+    mov     ecx, r11d
+.vc_ok:
+    rep     stosb
+    add     r9d, ecx
+    jmp     .vloop
+.vig_done:
     ret

@@ -74,6 +74,23 @@ section .data
     level1_end_x:       dd 14.0
     level1_end_y:       dd 2.0
 
+    ; ---- 32x32 wall/floor textures (1024 bytes each, 4-bit texels 0-7) ----
+    ; Type->texture index map: 1->0, 2->1, 3->2, 4->0, 5->3, 6->4
+    tex_type_map: db 0, 1, 2, 0, 3, 4
+    %include "src/tex_gen.inc"
+
+    ; Floor texture map: cell value (under player) -> floor texture index
+    ; 0=empty (dirt), 1=brick (stone floor), 2=stone, 3=wood
+    ; 5=burnt (dirt), 6=fire (dirt)
+    floortex_map: db 0, 2, 2, 1, 0, 0, 0  ; 0=dirt, 1=wood, 2=stone
+    floor_tex_table: dq tex_floor_dirt, tex_floor_stone, tex_floor_wood
+
+    ; ---- Auto-generated palette data ----
+    %include "src/palette_data.inc"
+
+    ; ---- Auto-generated shade/gradient/vignette tables ----
+    %include "src/shade_data.inc"
+
 ; ============================================================
 ; SECTION .BSS
 ; ============================================================
@@ -106,6 +123,21 @@ section .bss
     current_level:  resd 1
     level_end_x:    resd 1
     level_end_y:    resd 1
+
+    ; Frame counter for animations
+    frame_counter:  resd 1
+
+    ; Fire animation state
+    fire_anim_frame: resd 1
+
+    ; Particle system: 32 particles × 24 bytes
+    particles:      resb 768
+
+    ; Vignette spatial mask (decompressed from RLE at init, 320x200 bytes)
+    vignette_mask:  resb 64000
+
+    ; Wall column buffer: drawEnd per column for floor casting
+    wall_bottom:    resw 320     ; 640 bytes, 2 bytes per column
 
     ; BITMAPINFO (header + 256 palette entries)
     g_bmi:          resb 1064
