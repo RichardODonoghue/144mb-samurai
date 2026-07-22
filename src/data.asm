@@ -91,6 +91,43 @@ section .data
     ; ---- Auto-generated shade/gradient/vignette tables ----
     %include "src/shade_data.inc"
 
+    ; ---- HUD face sprites: 24×20 pixels × 5 damage states ----
+    %include "src/face_data.inc"
+
+    ; ---- HUD font: 3×5 pixel monospace (14 glyphs, white on transparent) ----
+    ; Order: 0 1 2 3 4 5 6 7 8 9 H P : /
+font_data:
+ ; '0'
+ db 254,191,191, 191,254,191, 191,254,191, 191,254,191, 254,191,191
+ ; '1'
+ db 254,191,254, 191,191,254, 254,191,254, 254,191,254, 191,191,191
+ ; '2'
+ db 191,191,191, 254,254,191, 191,191,191, 191,254,254, 191,191,191
+ ; '3'
+ db 191,191,191, 254,254,191, 191,191,191, 254,254,191, 191,191,191
+ ; '4'
+ db 191,254,191, 191,254,191, 191,191,191, 254,254,191, 254,254,191
+ ; '5'
+ db 191,191,191, 191,254,254, 191,191,191, 254,254,191, 191,191,191
+ ; '6'
+ db 191,191,191, 191,254,254, 191,191,191, 191,254,191, 191,191,191
+ ; '7'
+ db 191,191,191, 254,254,191, 254,254,191, 254,254,191, 254,254,191
+ ; '8'
+ db 191,191,191, 191,254,191, 191,191,191, 191,254,191, 191,191,191
+ ; '9'
+ db 191,191,191, 191,254,191, 191,191,191, 254,254,191, 191,191,191
+ ; 'H'
+ db 191,254,191, 191,254,191, 191,191,191, 191,254,191, 191,254,191
+ ; 'P'
+ db 191,191,191, 191,254,191, 191,191,191, 191,254,254, 191,254,254
+ ; ':'
+ db 254,254,254, 254,191,254, 254,254,254, 254,191,254, 254,254,254
+ ; '/'
+ db 254,254,191, 254,254,191, 254,191,254, 191,254,254, 191,254,254
+
+font_glyph_size equ 15     ; 3×5 = 15 bytes per glyph
+
 ; ============================================================
 ; SECTION .BSS
 ; ============================================================
@@ -126,6 +163,22 @@ section .bss
 
     ; Frame counter for animations
     frame_counter:  resd 1
+
+    ; HUD state
+    player_health:      resb 1
+    damage_flash_timer: resb 1
+    damage_cooldown:    resd 1
+
+    ; Combat state
+    attack_state:       resb 1
+    attack_timer:       resb 1
+    block_state:        resb 1
+    block_timer:        resb 1
+    prev_lmb:           resb 1
+    prev_rmb:           resb 1
+    blade_swing_x:      resd 1      ; float -- X offset for slash animation
+    blade_y_mod:         resd 1      ; float -- Y offset for block/anim
+    blade_width_mod:     resd 1      ; float -- blade width multiplier
 
     ; Fire animation state
     fire_anim_frame: resd 1

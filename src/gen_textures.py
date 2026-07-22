@@ -355,6 +355,23 @@ def gen_floor_wood():
         rows.append(row)
     return rows
 
+def gen_hud_panel():
+    """Dark metal plate texture for HUD panel background."""
+    rows = []
+    for y in range(32):
+        row = []
+        for x in range(32):
+            n = fbm(x * 0.3, y * 0.3, 2, 3.0, 0.4)
+            v = 3 + int(n * 1.5)
+            if v < 2: v = 2
+            if v > 5: v = 5
+            h = PERM[(x * 73 + y * 37) & 255]
+            if h > 240: v = 6
+            elif h > 230: v = 1
+            row.append(v)
+        rows.append(row)
+    return rows
+
 # ============================================================
 # PALETTE DATA GENERATION
 # ============================================================
@@ -664,6 +681,7 @@ def main():
         'floor_dirt': gen_floor_dirt(),
         'floor_stone': gen_floor_stone(),
         'floor_wood': gen_floor_wood(),
+        'hud_panel': gen_hud_panel(),
     }
 
     with open("src/tex_gen.inc", "w") as f:

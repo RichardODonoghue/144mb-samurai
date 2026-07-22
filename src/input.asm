@@ -221,22 +221,51 @@ process_input:
     mov     [prev_mouse_y], eax
 
 .skip_move:
-    ; Check mouse buttons (for future attack/block)
-    ; Left button
+    ; ---- Left mouse: attack (edge-triggered) ----
     mov     ecx, VK_LBUTTON
     call    GetAsyncKeyState
-    test    ax, ax
-    jns     .not_lclick
-    ; attack action (placeholder)
-.not_lclick:
+    mov     ebx, eax
+    test    bx, bx
+    jns     .lmb_up
+    cmp     byte [prev_lmb], 0
+    jne     .lmb_done
+    mov     byte [prev_lmb], 1
+    ; Start attack if idle
+    cmp     byte [attack_state], 0
+    jne     .lmb_done
+    mov     byte [attack_state], 1
+    mov     byte [attack_timer], 0
+    jmp     .lmb_done
+.lmb_up:
+    mov     byte [prev_lmb], 0
+.lmb_done:
 
-    ; Right button
+    ; ---- Right mouse: block (hold to block) ----
     mov     ecx, VK_RBUTTON
     call    GetAsyncKeyState
-    test    ax, ax
-    jns     .not_rclick
-    ; block action (placeholder)
-.not_rclick:
+    mov     ebx, eax
+    test    bx, bx
+    jns     .rmb_up
+    cmp     byte [prev_rmb], 0
+    jne     .rmb_held
+    mov     byte [prev_rmb], 1
+    ; Start block raise
+    cmp     byte [block_state], 0
+    jne     .rmb_held
+    mov     byte [block_state], 1
+    mov     byte [block_timer], 0
+.rmb_held:
+    jmp     .rmb_done
+.rmb_up:
+    cmp     byte [prev_rmb], 0
+    je      .rmb_done
+    mov     byte [prev_rmb], 0
+    ; Release block
+    cmp     byte [block_state], 0
+    je      .rmb_done
+    mov     byte [block_state], 3         ; releasing
+    mov     byte [block_timer], 0
+.rmb_done:
 
     add     rsp, 48h
     pop     rdi

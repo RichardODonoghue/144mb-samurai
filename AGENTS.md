@@ -16,6 +16,7 @@
 
 - **Build command**: `build.bat` (calls vcvars64 internally, then NASM → link)
 - **Pre-build command**: `py -3 src/gen_textures.py` (generates textures, palette data, shade tables)
+- **Face generation**: `py -3 src/gen_faces.py` (generates 24×20 samurai face sprites)
 - **Toolchain**: NASM → MSVC `link.exe` (C files via `cl.exe` when needed)
 - **Environment setup**: `build.bat` handles vcvars64 automatically. If running commands manually:
   `"C:\Program Files (x86)\Microsoft Visual Studio\2022\BuildTools\VC\Auxiliary\Build\vcvars64.bat"`

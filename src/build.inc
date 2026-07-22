@@ -73,6 +73,47 @@ ANIM_FIRE_INTERVAL equ 8    ; frames between fire palette cycles
 MAX_PARTICLES   equ 32
 PARTICLE_SIZE   equ 24
 
+; ---- HUD ----
+HUD_Y_START     equ 163
+HUD_Y_END       equ 199
+HUD_BAR_X       equ 50
+HUD_BAR_Y       equ 164
+HUD_BAR_W       equ 96
+HUD_BAR_H       equ 3
+HUD_FACE_X      equ 32
+HUD_FACE_Y      equ 164
+HUD_FACE_W      equ 24
+HUD_FACE_H      equ 20
+HUD_TEXT_X      equ 6
+HUD_TEXT_Y      equ 184
+HUD_HEART_X     equ 6
+HUD_HEART_Y     equ 164
+HUD_HEART_W     equ 20
+HUD_HEART_H     equ 18
+HUD_FONT_W      equ 3
+HUD_FONT_H      equ 5
+
+MAX_HEALTH      equ 100
+DAMAGE_FLASH_FRAMES equ 8
+
+; ---- Combat ----
+ATTACK_WINDUP        equ 4      ; frames pulling blade back
+ATTACK_SWING         equ 6      ; frames sweeping across
+ATTACK_RECOVER       equ 6      ; frames returning to rest
+ATTACK_TOTAL         equ 16     ; windup + swing + recover
+SWING_X_RANGE        equ 100    ; max X offset during swing arc
+BLOCK_RAISE_FRAMES   equ 3      ; frames to raise into block
+BLOCK_Y_OFFSET       equ 28     ; rows up from resting position
+BLOCK_X_OFFSET       equ 30     ; horizontal shift for blocking
+
+; HUD palette (repurposed unused entries)
+PAL_HUD_GREEN   equ 176
+PAL_HUD_RED     equ 190
+PAL_HUD_WHITE   equ 191
+PAL_HUD_BRUISE  equ 250
+PAL_HUD_PANEL   equ 254
+PAL_HUD_BORDER  equ 255
+
 ; Win32 constants
 IDC_ARROW           equ 7F00h
 CS_HREDRAW          equ 2

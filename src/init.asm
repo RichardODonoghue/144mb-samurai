@@ -85,17 +85,19 @@ init_palette:
     lea     rsi, [pal_weapon]
     mov     ecx, 8
     rep     movsd
+    ; Overwrite entry 176 (weapon green) with HUD green
+    mov     dword [g_bmi + BMICOLORS_OFFSET + PAL_HUD_GREEN * 4], 0000CC00h
 
     ; --- Fire animation entries (184-187) ---
     lea     rsi, [fire_cycle0]
     mov     ecx, 4
     rep     movsd
 
-    ; --- Particle/ash entries (188-191): dimmed fire + ash ---
-    mov     dword [rdi],      00FFB450h   ; bright fire ember
-    mov     dword [rdi + 4],  0064280Ah   ; dark red ember
-    mov     dword [rdi + 8],  00A09890h   ; smoke/ash grey
-    mov     dword [rdi + 12], 00303030h   ; dark ash
+    ; --- Particle/ash entries (188-191) ---
+    mov     dword [rdi],      00FFB450h   ; 188: bright fire ember
+    mov     dword [rdi + 4],  0064280Ah   ; 189: dark red ember
+    mov     dword [rdi + 8],  00CC0000h   ; 190: HUD red (blood) — R=204
+    mov     dword [rdi + 12], 00FFFFFFh   ; 191: HUD white
     add     rdi, 16
 
     ; --- Fog ramp (192-223): 32 entries ---
@@ -126,12 +128,12 @@ init_palette:
     ; --- Roof and foundation palette (248-255): 8 entries ---
     mov     dword [rdi],      0040302Ah   ; 248: dark blue-grey tile
     mov     dword [rdi + 4],  0050403Ah   ; 249: lighter tile
-    mov     dword [rdi + 8],  00685850h   ; 250: ridge highlight
+    mov     dword [rdi + 8],  0040204Ah   ; 250: HUD bruise (dark purple)
     mov     dword [rdi + 12], 00181410h   ; 251: eave shadow (near black)
     mov     dword [rdi + 16], 00484040h   ; 252: foundation dark stone
     mov     dword [rdi + 20], 0050604Ah   ; 253: eave curl highlight
-    mov     dword [rdi + 24], 0           ; 254: black
-    mov     dword [rdi + 28], 0           ; 255: black
+    mov     dword [rdi + 24], 00303038h   ; 254: HUD panel (dark gunmetal)
+    mov     dword [rdi + 28], 00606068h   ; 255: HUD border (medium grey)
 
     ret
 

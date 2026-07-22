@@ -502,6 +502,27 @@ draw_katana:
     cvtsi2ss xmm8, eax
     addss   xmm8, xmm0               ; y_offset=0
 
+    ; ---- Apply combat animation offsets (blade only) ----
+    movss   xmm12, [blade_swing_x]   ; X offset for swing/block
+    movss   xmm13, [blade_y_mod]     ; Y offset for block
+    movss   xmm14, [blade_width_mod] ; width mult (0=uninit → ignore)
+
+    ; Check if width_mod is valid (not zero)
+    pxor    xmm15, xmm15
+    comiss  xmm14, xmm15
+    jbe     .no_width_mod
+    mulss   xmm2, xmm14              ; dxl *= width_mod
+    mulss   xmm3, xmm14              ; dxr *= width_mod
+.no_width_mod:
+    addss   xmm4, xmm12              ; xl_base += swing_x
+    addss   xmm5, xmm12              ; xr_base += swing_x
+    addss   xmm0, xmm13              ; y_start += y_mod
+
+    ; Recompute y_offset with shifted y_start
+    mov     eax, -22
+    cvtsi2ss xmm8, eax
+    addss   xmm8, xmm0               ; y_offset = y_start-22
+
 .blade_loop:
     cmp     ecx, 125
     jg      .blade_done

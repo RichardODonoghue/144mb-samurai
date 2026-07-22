@@ -37,10 +37,12 @@ extern SetForegroundWindow
 %include "src/init.asm"
 %include "src/render.asm"
 %include "src/floor.asm"
+%include "src/hud.asm"
 %include "src/input.asm"
 %include "src/wndproc.asm"
 %include "src/level.asm"
 %include "src/effects.asm"
+%include "src/combat.asm"
 
 ; ============================================================
 ; ENTRY POINT & GAME LOOP
@@ -74,6 +76,8 @@ game_loop:
     call    level_check_end
     call    update_particles
     call    animate_fire
+    call    update_hud
+    call    update_combat
     call    render_frame
     mov     rcx, [g_hwnd]
     xor     edx, edx
@@ -100,6 +104,9 @@ main:
     mov     ecx, 1
     call    level_init
     mov     byte [player_paused], 0
+    mov     byte [player_health], MAX_HEALTH
+    mov     byte [damage_flash_timer], 0
+    mov     dword [damage_cooldown], 0
 
     ; Register window class
     lea     rdi, [rsp + 30h]
