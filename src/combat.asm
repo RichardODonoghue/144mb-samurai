@@ -12,24 +12,24 @@ update_combat:
     test    eax, eax
     jz      .check_block
 
-    ; Increment timer
+    ; Compute animation from current timer, THEN increment
     movzx   ecx, byte [attack_timer]
-    inc     cl
-    mov     [attack_timer], cl
 
     cmp     al, 1                        ; WINDUP
     jne     .chk_swing
 
-    ; WINDUP: swing_x = timer * 10  (0..40)
-    movzx   eax, byte [attack_timer]
-    imul    eax, 10
+    ; WINDUP: swing_x = timer * 15  (0..60 with 4 frames)
+    movzx   eax, cl
+    imul    eax, 15
     cvtsi2ss xmm0, eax
     movss   [blade_swing_x], xmm0
     mov     dword [blade_width_mod], 0x3F800000   ; 1.0
-    mov     dword [blade_y_mod], 0               ; 0.0
+    mov     dword [blade_y_mod], 0
+    inc     cl
+    mov     [attack_timer], cl
     cmp     cl, ATTACK_WINDUP
     jb      .combat_done
-    mov     byte [attack_state], 2
+    mov     byte [attack_state], 2        ; advance to swing
     mov     byte [attack_timer], 0
     jmp     .combat_done
 
@@ -37,17 +37,19 @@ update_combat:
     cmp     al, 2                        ; SWING
     jne     .chk_recover
 
-    ; SWING: swing_x = 40 - timer * 17  (40..-62)
-    movzx   eax, byte [attack_timer]
-    imul    eax, -17
-    add     eax, 40
+    ; SWING: swing_x = 60 - timer * 20  (60..-60 over 6 frames)
+    movzx   eax, cl
+    imul    eax, -20
+    add     eax, 60
     cvtsi2ss xmm0, eax
     movss   [blade_swing_x], xmm0
     mov     dword [blade_width_mod], 0x3F99999A   ; 1.2
-    mov     dword [blade_y_mod], 0               ; 0.0
+    mov     dword [blade_y_mod], 0
+    inc     cl
+    mov     [attack_timer], cl
     cmp     cl, ATTACK_SWING
     jb      .combat_done
-    mov     byte [attack_state], 3
+    mov     byte [attack_state], 3        ; advance to recovery
     mov     byte [attack_timer], 0
     jmp     .combat_done
 
@@ -55,15 +57,16 @@ update_combat:
     cmp     al, 3                        ; RECOVER
     jne     .attack_idle
 
-    ; RECOVER: swing_x = -60 + timer * 10  (-60..-10)
-    movzx   eax, byte [attack_timer]
+    ; RECOVER: swing_x = -60 + timer * 10  (-60..0 over 6 frames)
+    movzx   eax, cl
     imul    eax, 10
     sub     eax, 60
     cvtsi2ss xmm0, eax
     movss   [blade_swing_x], xmm0
-    ; width_mod: return from 1.2 to 1.0
-    mov     dword [blade_width_mod], 0x3F99999A   ; 1.2 (simplified, stays during recovery)
-    mov     dword [blade_y_mod], 0               ; 0.0
+    mov     dword [blade_width_mod], 0x3F99999A   ; 1.2
+    mov     dword [blade_y_mod], 0
+    inc     cl
+    mov     [attack_timer], cl
     cmp     cl, ATTACK_RECOVER
     jb      .combat_done
 .attack_idle:
@@ -81,15 +84,13 @@ update_combat:
     jz      .no_block
 
     movzx   ecx, byte [block_timer]
-    inc     cl
-    mov     [block_timer], cl
 
     cmp     al, 1                        ; RAISING
     jne     .chk_block_hold
 
-    ; RAISING: y_mod = timer * 9, swing_x = timer * 10
+    ; RAISING: y_mod = timer * 10, swing_x = timer * 10
     movzx   eax, cl
-    imul    eax, 9
+    imul    eax, 10
     cvtsi2ss xmm0, eax
     movss   [blade_y_mod], xmm0
     movzx   eax, cl
@@ -97,6 +98,8 @@ update_combat:
     cvtsi2ss xmm0, eax
     movss   [blade_swing_x], xmm0
     mov     dword [blade_width_mod], 0x3F800000   ; 1.0
+    inc     cl
+    mov     [block_timer], cl
     cmp     cl, BLOCK_RAISE_FRAMES
     jb      .combat_done
     mov     byte [block_state], 2        ; holding
@@ -112,7 +115,6 @@ update_combat:
 .chk_block_hold:
     cmp     al, 2                        ; HOLDING
     jne     .chk_block_release
-    ; Steady block pose
     mov     eax, BLOCK_Y_OFFSET
     cvtsi2ss xmm0, eax
     movss   [blade_y_mod], xmm0
@@ -126,9 +128,8 @@ update_combat:
     cmp     al, 3                        ; RELEASING
     jne     .no_block
 
-    ; RELEASING: y_mod = 28 - timer * 9, swing_x = 30 - timer * 10
     movzx   eax, cl
-    imul    eax, 9
+    imul    eax, 8
     mov     ebx, BLOCK_Y_OFFSET
     sub     ebx, eax
     jns     .bry_ok
@@ -137,7 +138,7 @@ update_combat:
     cvtsi2ss xmm0, ebx
     movss   [blade_y_mod], xmm0
     movzx   eax, cl
-    imul    eax, 10
+    imul    eax, 8
     mov     ebx, BLOCK_X_OFFSET
     sub     ebx, eax
     jns     .brx_ok
@@ -146,6 +147,8 @@ update_combat:
     cvtsi2ss xmm0, ebx
     movss   [blade_swing_x], xmm0
     mov     dword [blade_width_mod], 0x3F800000   ; 1.0
+    inc     cl
+    mov     [block_timer], cl
     cmp     cl, 4
     jb      .combat_done
     mov     byte [block_state], 0
@@ -155,7 +158,6 @@ update_combat:
     jmp     .combat_done
 
 .no_block:
-    ; Reset to idle if no attack and no block
     mov     dword [blade_swing_x], 0
     mov     dword [blade_width_mod], 0x3F800000   ; 1.0
     mov     dword [blade_y_mod], 0

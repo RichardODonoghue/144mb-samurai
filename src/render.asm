@@ -478,6 +478,11 @@ render_frame:
 ; (extracted from old render_frame end section)
 ; ================================================================
 draw_katana:
+    ; Load animation globals
+    movss   xmm12, [blade_swing_x]   ; X offset
+    cvttss2si r12d, [blade_y_mod]    ; integer Y offset
+    cvttss2si r13d, xmm12            ; integer X offset
+
     ; Blade: Y=22..125, spine 135→185, edge 143→210, dy=103
     mov     eax, 22
     cvtsi2ss xmm0, eax               ; y_start
@@ -615,6 +620,8 @@ draw_katana:
     mulss   xmm9, xmm3
     addss   xmm9, xmm5
     cvttss2si r9d, xmm9
+    add     r8d, r13d                ; X shift
+    add     r9d, r13d
     cmp     r8d, 0
     jge     .tx
     xor     r8d, r8d
@@ -623,7 +630,8 @@ draw_katana:
     jle     .ty
     mov     r9d, SCR_W - 1
 .ty:
-    imul    r10d, ecx, SCR_W
+    lea     edx, [ecx + r12d]       ; Y shift
+    imul    r10d, edx, SCR_W
     mov     eax, r8d
 .tsfill:
     cmp     eax, r9d
@@ -669,6 +677,8 @@ draw_katana:
     mulss   xmm9, xmm3
     addss   xmm9, xmm5
     cvttss2si r9d, xmm9
+    add     r8d, r13d                ; X shift
+    add     r9d, r13d
     cmp     r8d, 0
     jge     .hxl
     xor     r8d, r8d
@@ -677,7 +687,8 @@ draw_katana:
     jle     .hxr
     mov     r9d, SCR_W - 1
 .hxr:
-    imul    r10d, ecx, SCR_W
+    lea     edx, [ecx + r12d]       ; Y shift
+    imul    r10d, edx, SCR_W
     mov     eax, r8d
 .hdl_fill:
     cmp     eax, r9d
@@ -729,6 +740,8 @@ draw_katana:
     mulss   xmm9, xmm3
     addss   xmm9, xmm5
     cvttss2si r9d, xmm9
+    add     r8d, r13d                ; X shift
+    add     r9d, r13d
     cmp     r8d, 0
     jge     .axl
     xor     r8d, r8d
@@ -737,7 +750,8 @@ draw_katana:
     jle     .axr
     mov     r9d, SCR_W - 1
 .axr:
-    imul    r10d, ecx, SCR_W
+    lea     edx, [ecx + r12d]       ; Y shift
+    imul    r10d, edx, SCR_W
     mov     eax, r8d
 .afill:
     cmp     eax, r9d
@@ -758,13 +772,15 @@ draw_katana:
 .hand_loop:
     cmp     ecx, 150
     jg      .hand_done
-    imul    r10d, ecx, SCR_W
+    lea     edx, [ecx + r12d]       ; Y shift
+    imul    r10d, edx, SCR_W
     mov     eax, 178
 .fistfill:
     cmp     eax, 216
     jg      .handnext
     mov     edx, r10d
     add     edx, eax
+    add     edx, r13d               ; X shift
     mov     r11d, ecx
     sub     r11d, 136
     cmp     r11d, 2
