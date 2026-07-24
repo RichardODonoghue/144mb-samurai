@@ -42,6 +42,8 @@ extern SetForegroundWindow
 %include "src/wndproc.asm"
 %include "src/level.asm"
 %include "src/effects.asm"
+%include "src/sprite.asm"
+%include "src/weapon.asm"
 %include "src/combat.asm"
 
 ; ============================================================

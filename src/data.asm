@@ -94,6 +94,21 @@ section .data
     ; ---- HUD face sprites: 24×20 pixels × 5 damage states ----
     %include "src/face_data.inc"
 
+    ; ---- Weapon & arm sprites (procedurally generated) ----
+    %include "src/sprites/katana_idle.inc"
+    %include "src/sprites/katana_windup_1.inc"
+    %include "src/sprites/katana_windup_2.inc"
+    %include "src/sprites/katana_swing_1.inc"
+    %include "src/sprites/katana_swing_2.inc"
+    %include "src/sprites/katana_swing_3.inc"
+    %include "src/sprites/katana_block.inc"
+    %include "src/sprites/arms_idle.inc"
+    %include "src/sprites/arms_attack_1.inc"
+    %include "src/sprites/arms_attack_2.inc"
+    %include "src/sprites/arms_attack_3.inc"
+    %include "src/sprites/arms_block.inc"
+    %include "src/sprites/_sprite_table.inc"
+
     ; ---- HUD font: 3×5 pixel monospace (14 glyphs, white on transparent) ----
     ; Order: 0 1 2 3 4 5 6 7 8 9 H P : /
 font_data:
@@ -178,7 +193,6 @@ section .bss
     prev_rmb:           resb 1
     blade_swing_x:      resd 1      ; float -- X offset for slash animation
     blade_y_mod:         resd 1      ; float -- Y offset for block/anim
-    blade_width_mod:     resd 1      ; float -- blade width multiplier
 
     ; Fire animation state
     fire_anim_frame: resd 1

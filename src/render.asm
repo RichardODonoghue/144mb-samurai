@@ -345,6 +345,7 @@ render_frame:
 .post_wall:
     ; ================================================================
     ; ROOF RENDERING: Japanese curved tile roof above building walls
+    ; Uses tiled tex_roof texture (32x32, direct palette indices)
     ; ================================================================
     cmp     r13d, 2                    ; stone (castle wall) = no roof
     je      .foundation
@@ -391,20 +392,25 @@ render_frame:
     jmp     .roof_store
 
 .roof_tile:
-    ; Checkerboard tile pattern: (col + row) & 1
-    lea     eax, [ecx + r12d]
-    and     eax, 1
-    add     eax, PAL_ROOF_TILE_1              ; 248 or 249
-
-    ; Eave curl highlight: near wallX edges (0-3 or 28-31)
+    ; Eave curl highlight at extreme edges
     cmp     r11d, 4
     jae     .chk_curl_r
-    mov     eax, PAL_EAVE_CURL                ; left curled eave corner
+    mov     al, PAL_EAVE_CURL                ; left curled eave corner
     jmp     .roof_store
 .chk_curl_r:
     cmp     r11d, 28
-    jb      .roof_store
-    mov     eax, PAL_EAVE_CURL                ; right curled eave corner
+    jb      .roof_sample
+    mov     al, PAL_EAVE_CURL                ; right curled eave corner
+    jmp     .roof_store
+
+.roof_sample:
+    ; Tile tex_roof: tex_x = wallX & 31, tex_y = (drawStart - row) & 31
+    mov     eax, [rsp + 12]                  ; drawStart
+    sub     eax, ecx                         ; row from roof top
+    and     eax, 31                          ; tex_y
+    shl     eax, 5                           ; tex_y * 32
+    add     eax, r11d                        ; + tex_x (wallX)
+    movzx   eax, byte [tex_roof + rax]       ; read tile pixel
 
 .roof_store:
     mov     byte [r15 + rdx], al
@@ -415,7 +421,8 @@ render_frame:
 
 .foundation:
     ; ================================================================
-    ; FOUNDATION BAND: dark stone band at bottom of building walls
+    ; FOUNDATION BAND: tiled stone texture at bottom of building walls
+    ; Uses tex_foundation (32x8, direct palette indices)
     ; ================================================================
     cmp     r13d, 2                    ; stone walls = no foundation band
     je      .next_col
@@ -437,8 +444,17 @@ render_frame:
     cmp     ecx, 0
     jl      .found_next
     imul    edx, ecx, SCR_W
-    add     edx, r12d
-    mov     byte [r15 + rdx], PAL_FOUNDATION
+    add     edx, r12d                   ; pixel offset = y*SCR_W + col
+
+    ; Tile tex_foundation: tex_x = wallX & 31, tex_y = (drawEnd - row) & 7
+    mov     eax, edi                    ; drawEnd
+    sub     eax, ecx                    ; rows from bottom
+    and     eax, 7                      ; tex_y (0..7)
+    shl     eax, 5                      ; tex_y * 32
+    add     eax, r11d                   ; + tex_x (wallX, 0..31)
+    movzx   eax, byte [tex_foundation + rax]
+    mov     byte [r15 + rdx], al
+
 .found_next:
     inc     ecx
     jmp     .found_row
@@ -454,11 +470,12 @@ render_frame:
     mov     word [rbp + r12*2], 0
     jmp     .next_col
 
-    ; ---- Post-draw: floor, particles, weapon, vignette ----
+    ; ---- Post-draw: floor, particles, weapon, HUD, vignette ----
 .post_draw:
     call    render_floor
     call    draw_particles
-    call    draw_katana
+    call    draw_weapon
+    call    draw_hud
     call    apply_vignette
 
 .done:
@@ -471,337 +488,6 @@ render_frame:
     pop     r13
     pop     r12
     pop     rbx
-    ret
-
-; ================================================================
-; draw_katana -- curved katana weapon overlay
-; (extracted from old render_frame end section)
-; ================================================================
-draw_katana:
-    ; Load animation globals
-    movss   xmm12, [blade_swing_x]   ; X offset
-    cvttss2si r12d, [blade_y_mod]    ; integer Y offset
-    cvttss2si r13d, xmm12            ; integer X offset
-
-    ; Blade: Y=22..125, spine 135→185, edge 143→210, dy=103
-    mov     eax, 22
-    cvtsi2ss xmm0, eax               ; y_start
-    mov     ecx, 22                  ; y int
-    mov     eax, 103
-    cvtsi2ss xmm1, eax               ; dy
-    movss   xmm10, [float_one]
-    divss   xmm10, xmm1              ; inv_dy
-    mov     eax, 50
-    cvtsi2ss xmm2, eax               ; dxl=185-135
-    mov     eax, 67
-    cvtsi2ss xmm3, eax               ; dxr=210-143
-    mov     eax, 135
-    cvtsi2ss xmm4, eax               ; xl_base
-    mov     eax, 143
-    cvtsi2ss xmm5, eax               ; xr_base
-    mov     eax, -28
-    cvtsi2ss xmm6, eax               ; spine_curve
-    mov     eax, -8
-    cvtsi2ss xmm7, eax               ; edge_curve
-    mov     eax, -22
-    cvtsi2ss xmm8, eax
-    addss   xmm8, xmm0               ; y_offset=0
-
-    ; ---- Apply combat animation offsets (blade only) ----
-    movss   xmm12, [blade_swing_x]   ; X offset for swing/block
-    movss   xmm13, [blade_y_mod]     ; Y offset for block
-
-    addss   xmm4, xmm12              ; xl_base += swing_x
-    addss   xmm5, xmm12              ; xr_base += swing_x
-    addss   xmm0, xmm13              ; y_start += y_mod
-
-    ; Recompute y_offset with shifted y_start
-    mov     eax, -22
-    cvtsi2ss xmm8, eax
-    addss   xmm8, xmm0               ; y_offset = y_start-22
-
-.blade_loop:
-    cmp     ecx, 125
-    jg      .blade_done
-    movaps  xmm9, xmm8
-    mulss   xmm9, xmm10              ; t
-    movaps  xmm12, xmm9
-    mulss   xmm12, xmm9              ; t*t
-    movaps  xmm11, xmm9
-    subss   xmm11, xmm12             ; curve_f = t-t^2
-    ; spine_x
-    movaps  xmm13, xmm9
-    mulss   xmm13, xmm2
-    addss   xmm13, xmm4
-    movaps  xmm14, xmm11
-    mulss   xmm14, xmm6
-    addss   xmm13, xmm14
-    cvttss2si r8d, xmm13
-    ; edge_x
-    movaps  xmm14, xmm9
-    mulss   xmm14, xmm3
-    addss   xmm14, xmm5
-    movaps  xmm15, xmm11
-    mulss   xmm15, xmm7
-    addss   xmm14, xmm15
-    cvttss2si r9d, xmm14
-    cmp     r8d, 0
-    jge     .bxl
-    xor     r8d, r8d
-.bxl:
-    cmp     r9d, SCR_W - 1
-    jle     .bxr
-    mov     r9d, SCR_W - 1
-.bxr:
-    imul    r10d, ecx, SCR_W
-    mov     eax, r8d
-.bifill:
-    cmp     eax, r9d
-    jg      .biedge
-    mov     edx, r10d
-    add     edx, eax
-    mov     byte [r15 + rdx], PAL_WEAPON_BLADE
-    inc     eax
-    jmp     .bifill
-.biedge:
-    mov     eax, r9d
-    sub     eax, 1
-    cmp     eax, r8d
-    jl      .bnext
-    add     eax, r10d
-    mov     byte [r15 + rax], PAL_WEAPON_SHINE
-    mov     eax, r9d
-    sub     eax, 2
-    cmp     eax, r8d
-    jl      .bnext
-    add     eax, r10d
-    mov     byte [r15 + rax], PAL_WEAPON_SHINE
-.bnext:
-    addss   xmm8, [float_one]
-    inc     ecx
-    jmp     .blade_loop
-
-.blade_done:
-    ; Tsuba angled: Y=125→128, X=185→178 (L), X=210→218 (R)
-    mov     ecx, 125
-    mov     eax, 125
-    cvtsi2ss xmm0, eax
-    mov     eax, 3
-    cvtsi2ss xmm1, eax               ; dy=3
-    mov     eax, -7
-    cvtsi2ss xmm2, eax
-    divss   xmm2, xmm1               ; slopeL = -7/3
-    mov     eax, 8
-    cvtsi2ss xmm3, eax
-    divss   xmm3, xmm1               ; slopeR = 8/3
-    mov     eax, 185
-    cvtsi2ss xmm4, eax
-    mov     eax, 210
-    cvtsi2ss xmm5, eax
-    mov     eax, -125
-    cvtsi2ss xmm8, eax
-    addss   xmm8, xmm0
-.tsuba_loop:
-    cmp     ecx, 128
-    jg      .tsuba_done
-    movaps  xmm9, xmm8
-    mulss   xmm9, xmm2
-    addss   xmm9, xmm4
-    cvttss2si r8d, xmm9
-    movaps  xmm9, xmm8
-    mulss   xmm9, xmm3
-    addss   xmm9, xmm5
-    cvttss2si r9d, xmm9
-    add     r8d, r13d                ; X shift
-    add     r9d, r13d
-    cmp     r8d, 0
-    jge     .tx
-    xor     r8d, r8d
-.tx:
-    cmp     r9d, SCR_W - 1
-    jle     .ty
-    mov     r9d, SCR_W - 1
-.ty:
-    lea     edx, [ecx + r12d]       ; Y shift
-    imul    r10d, edx, SCR_W
-    mov     eax, r8d
-.tsfill:
-    cmp     eax, r9d
-    jg      .tsnxt
-    mov     edx, r10d
-    add     edx, eax
-    mov     byte [r15 + rdx], PAL_WEAPON_TSUBA
-    inc     eax
-    jmp     .tsfill
-.tsnxt:
-    addss   xmm8, [float_one]
-    inc     ecx
-    jmp     .tsuba_loop
-
-.tsuba_done:
-    ; Handle Y=128..170  XL=180→186  XR=210→215
-    mov     ecx, 128
-    mov     eax, 128
-    cvtsi2ss xmm0, eax
-    mov     eax, 42
-    cvtsi2ss xmm1, eax
-    mov     eax, 6
-    cvtsi2ss xmm2, eax
-    divss   xmm2, xmm1
-    mov     eax, 5
-    cvtsi2ss xmm3, eax
-    divss   xmm3, xmm1
-    mov     eax, 180
-    cvtsi2ss xmm4, eax
-    mov     eax, 210
-    cvtsi2ss xmm5, eax
-    mov     eax, -128
-    cvtsi2ss xmm8, eax
-    addss   xmm8, xmm0
-.hloop:
-    cmp     ecx, 170
-    jg      .hdl_done
-    movaps  xmm9, xmm8
-    mulss   xmm9, xmm2
-    addss   xmm9, xmm4
-    cvttss2si r8d, xmm9
-    movaps  xmm9, xmm8
-    mulss   xmm9, xmm3
-    addss   xmm9, xmm5
-    cvttss2si r9d, xmm9
-    add     r8d, r13d                ; X shift
-    add     r9d, r13d
-    cmp     r8d, 0
-    jge     .hxl
-    xor     r8d, r8d
-.hxl:
-    cmp     r9d, SCR_W - 1
-    jle     .hxr
-    mov     r9d, SCR_W - 1
-.hxr:
-    lea     edx, [ecx + r12d]       ; Y shift
-    imul    r10d, edx, SCR_W
-    mov     eax, r8d
-.hdl_fill:
-    cmp     eax, r9d
-    jg      .hdl_next
-    mov     edx, r10d
-    add     edx, eax
-    test    ecx, 2
-    jz      .hcol
-    mov     byte [r15 + rdx], PAL_WEAPON_TSUBA
-    jmp     .hcol_ok
-.hcol:
-    mov     byte [r15 + rdx], PAL_WEAPON_WRAP
-.hcol_ok:
-    inc     eax
-    jmp     .hdl_fill
-.hdl_next:
-    addss   xmm8, [float_one]
-    inc     ecx
-    jmp     .hloop
-
-.hdl_done:
-    ; Right arm Y=115..135  XL=210→192  XR=315→308
-    mov     ecx, 115
-    mov     eax, 115
-    cvtsi2ss xmm0, eax
-    mov     eax, 20
-    cvtsi2ss xmm1, eax
-    mov     eax, -18
-    cvtsi2ss xmm2, eax
-    divss   xmm2, xmm1
-    mov     eax, -7
-    cvtsi2ss xmm3, eax
-    divss   xmm3, xmm1
-    mov     eax, 210
-    cvtsi2ss xmm4, eax
-    mov     eax, 315
-    cvtsi2ss xmm5, eax
-    mov     eax, -115
-    cvtsi2ss xmm8, eax
-    addss   xmm8, xmm0
-.arm_loop:
-    cmp     ecx, 135
-    jg      .arm_done
-    movaps  xmm9, xmm8
-    mulss   xmm9, xmm2
-    addss   xmm9, xmm4
-    cvttss2si r8d, xmm9
-    movaps  xmm9, xmm8
-    mulss   xmm9, xmm3
-    addss   xmm9, xmm5
-    cvttss2si r9d, xmm9
-    add     r8d, r13d                ; X shift
-    add     r9d, r13d
-    cmp     r8d, 0
-    jge     .axl
-    xor     r8d, r8d
-.axl:
-    cmp     r9d, SCR_W - 1
-    jle     .axr
-    mov     r9d, SCR_W - 1
-.axr:
-    lea     edx, [ecx + r12d]       ; Y shift
-    imul    r10d, edx, SCR_W
-    mov     eax, r8d
-.afill:
-    cmp     eax, r9d
-    jg      .anext
-    mov     edx, r10d
-    add     edx, eax
-    mov     byte [r15 + rdx], PAL_WEAPON_SKIN_L
-    inc     eax
-    jmp     .afill
-.anext:
-    addss   xmm8, [float_one]
-    inc     ecx
-    jmp     .arm_loop
-
-.arm_done:
-    ; Hand on handle Y=136..150  X=178..216
-    mov     ecx, 136
-.hand_loop:
-    cmp     ecx, 150
-    jg      .hand_done
-    lea     edx, [ecx + r12d]       ; Y shift
-    imul    r10d, edx, SCR_W
-    mov     eax, 178
-.fistfill:
-    cmp     eax, 216
-    jg      .handnext
-    mov     edx, r10d
-    add     edx, eax
-    add     edx, r13d               ; X shift
-    mov     r11d, ecx
-    sub     r11d, 136
-    cmp     r11d, 2
-    jl      .fist_body
-    cmp     r11d, 12
-    jg      .fist_body
-    test    r11d, 1
-    jz      .fin_gap
-    cmp     eax, 190
-    jl      .fist_body
-    cmp     eax, 208
-    jg      .fist_body
-    mov     byte [r15 + rdx], PAL_WEAPON_SKIN_L
-    jmp     .fistcol_ok
-.fin_gap:
-    cmp     eax, 189
-    jne     .fistcol_ok
-    mov     byte [r15 + rdx], PAL_WEAPON_TSUBA
-    jmp     .fistcol_ok
-.fist_body:
-    mov     byte [r15 + rdx], PAL_WEAPON_SKIN_D
-.fistcol_ok:
-    inc     eax
-    jmp     .fistfill
-.handnext:
-    inc     ecx
-    jmp     .hand_loop
-
-.hand_done:
     ret
 
 ; ================================================================

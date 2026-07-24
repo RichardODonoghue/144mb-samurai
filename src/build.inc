@@ -7,36 +7,35 @@ DEFAULT REL
 
 SCR_W           equ 320
 SCR_H           equ 200
-MAP_W           equ 16
-MAP_H           equ 16
+MAP_W           equ 32
+MAP_H           equ 32
 FOV_HALF        equ 33
-MAX_DEPTH       equ 32
+MAX_DEPTH       equ 64
 
 ; Palette layout
 PAL_SKY_START       equ 0
 PAL_SKY_COUNT       equ 64
-PAL_FLOOR_DIRT      equ 64
-PAL_WALL_BASE       equ 80
-PAL_WALL_STRIDE     equ 16      ; 16 entries per wall type (8 light + 8 dark)
-PAL_WALL_X_MASK     equ 7       ; texel value range 0-7
-PAL_FLOOR_WOOD      equ 160
-PAL_WEAPON_BASE     equ 176
-PAL_WEAPON_GREEN    equ 176
-PAL_WEAPON_TSUBA    equ 177
-PAL_WEAPON_BLADE    equ 178
-PAL_WEAPON_SHINE    equ 179
-PAL_WEAPON_WRAP     equ 180
-PAL_WEAPON_SKIN_L   equ 181
-PAL_WEAPON_SKIN_D   equ 182
-PAL_WEAPON_BLACK    equ 183
+PAL_BUILDING_BASE   equ 64      ; 64-95: 32 entries shared building palette
+PAL_BUILDING_COUNT  equ 32
+PAL_FLOOR_BASE      equ 96      ; 96-127: 32 entries floor palette
+PAL_FLOOR_WOOD      equ 128     ; 128-143: wood floor (8 light + 8 dark)
+PAL_WPN_BASE        equ 176
+PAL_WPN_GREEN       equ 176
+PAL_WPN_TSUBA       equ 177
+PAL_WPN_BLADE       equ 178
+PAL_WPN_SHINE       equ 179
+PAL_WPN_WRAP        equ 180
+PAL_WPN_SKIN_L      equ 181
+PAL_WPN_SKIN_D      equ 182
+PAL_WPN_BLACK       equ 183
 PAL_FX_BASE         equ 184
-PAL_FIRE_ANIM       equ 184  ; 4 fire anim entries
-PAL_PARTICLE        equ 188  ; particle color range
+PAL_FIRE_ANIM       equ 184
+PAL_PARTICLE        equ 188
 PAL_FOG_START       equ 192
 PAL_FOG_COUNT       equ 32
 PAL_VIGNETTE        equ 224
 
-; Roof and foundation palette (steal 8 entries from vignette ramp)
+; Roof and foundation
 PAL_ROOF_TILE_1     equ 248
 PAL_ROOF_TILE_2     equ 249
 PAL_ROOF_RIDGE      equ 250
@@ -44,30 +43,66 @@ PAL_ROOF_EAVE       equ 251
 PAL_FOUNDATION      equ 252
 PAL_EAVE_CURL       equ 253
 
-; Roof system
-MAX_ROOF_H          equ 16
-ROOF_DIST_LIMIT     equ 24      ; no roof beyond this distance bucket
-FOUNDATION_ROWS     equ 3       ; rows of foundation band at wall bottom
+; HUD
+PAL_HUD_GREEN   equ 176
+PAL_HUD_RED     equ 190
+PAL_HUD_WHITE   equ 191
+PAL_HUD_BRUISE  equ 250
+PAL_HUD_PANEL   equ 254
+PAL_HUD_BORDER  equ 255
 
-; Wall type mapping: cell_value -> wall_type for palette (1..N)
-; texture type_index = tex_type_map[cell_value - 1]
-; palette base = PAL_WALL_BASE + (cell_value - 1) * PAL_WALL_STRIDE
+; Building palette sub-ranges (within 64-95)
+WHITE_0     equ 64     ; white plaster: bright, mid, warm, shadow
+WHITE_1     equ 65
+WHITE_2     equ 66
+WHITE_3     equ 67
+RED_0       equ 68     ; red lacquer: bright, mid, dark, deep
+RED_1       equ 69
+RED_2       equ 70
+RED_3       equ 71
+TIMBER_0    equ 72     ; dark timber: lightest, framing, post, black-brown
+TIMBER_1    equ 73
+TIMBER_2    equ 74
+TIMBER_3    equ 75
+TANWOOD_0   equ 76     ; natural tan wood: light, mid, dark, grain
+TANWOOD_1   equ 77
+TANWOOD_2   equ 78
+TANWOOD_3   equ 79
+WARMWOOD_0  equ 80     ; warm brown wood: light, mid, dark, deep
+WARMWOOD_1  equ 81
+WARMWOOD_2  equ 82
+WARMWOOD_3  equ 83
+ROOF_0      equ 84     ; grey roof tiles: light, mid, dark, shadow
+ROOF_1      equ 85
+ROOF_2      equ 86
+ROOF_3      equ 87
+STONE_0     equ 88     ; stone/foundation: light, mid, dark, mortar
+STONE_1     equ 89
+STONE_2     equ 90
+STONE_3     equ 91
+MURAL_0     equ 92     ; mural accents: blue-green, gold, deep red, moss
+MURAL_1     equ 93
+MURAL_2     equ 94
+MURAL_3     equ 95
 
 ; Texture dimensions
-TEX_W           equ 32
-TEX_H           equ 32
-TEX_SIZE        equ 1024    ; 32 * 32 bytes
-TEX_TEXEL_MASK  equ 7       ; 4-bit texels 0-7
-TEX_SIDE_SHIFT  equ 8       ; +8 for Y-side dark sub-palette
+TEX_W           equ 64
+TEX_H           equ 64
+TEX_SIZE        equ 4096        ; 64 * 64 bytes
 
-; Shading
+; Shading (8-bit direct palette → shade LUT lookup)
 MAX_DIST_BUCKET equ 63
+SHADE_BANDS     equ 4           ; 4 distance bands, each 256-byte LUT
+SHADE_LUT_SIZE  equ 1024        ; 4 * 256 bytes
+FOG_BEGIN       equ 32
 
-; Fog
-FOG_BEGIN       equ 32      ; distance bucket where fog starts
+; Roof system
+MAX_ROOF_H          equ 18
+ROOF_DIST_LIMIT     equ 24
+FOUNDATION_ROWS     equ 5
 
 ; Animation
-ANIM_FIRE_INTERVAL equ 8    ; frames between fire palette cycles
+ANIM_FIRE_INTERVAL equ 8
 
 ; Particle
 MAX_PARTICLES   equ 32
@@ -92,29 +127,26 @@ HUD_HEART_W     equ 20
 HUD_HEART_H     equ 18
 HUD_FONT_W      equ 3
 HUD_FONT_H      equ 5
-
 MAX_HEALTH      equ 100
 DAMAGE_FLASH_FRAMES equ 8
 
+; ---- Weapon sprite system ----
+SPRITE_TRANSPARENT  equ 0
+WEP_BASE_X          equ 105
+WEP_BASE_Y          equ 25
+ARM_BASE_X          equ 120
+ARM_BASE_Y          equ 98
+
 ; ---- Combat ----
-ATTACK_WINDUP        equ 4      ; frames pulling blade back
-ATTACK_SWING         equ 6      ; frames sweeping across
-ATTACK_RECOVER       equ 6      ; frames returning to rest
-ATTACK_TOTAL         equ 16     ; windup + swing + recover
-SWING_X_RANGE        equ 100    ; max X offset during swing arc
-BLOCK_RAISE_FRAMES   equ 3      ; frames to raise into block
-BLOCK_Y_OFFSET       equ 28     ; rows up from resting position
-BLOCK_X_OFFSET       equ 30     ; horizontal shift for blocking
+ATTACK_WINDUP        equ 4
+ATTACK_SWING         equ 6
+ATTACK_RECOVER       equ 6
+ATTACK_TOTAL         equ 16
+BLOCK_RAISE_FRAMES   equ 3
+BLOCK_Y_OFFSET       equ 28
+BLOCK_X_OFFSET       equ 30
 
-; HUD palette (repurposed unused entries)
-PAL_HUD_GREEN   equ 176
-PAL_HUD_RED     equ 190
-PAL_HUD_WHITE   equ 191
-PAL_HUD_BRUISE  equ 250
-PAL_HUD_PANEL   equ 254
-PAL_HUD_BORDER  equ 255
-
-; Win32 constants
+; Win32
 IDC_ARROW           equ 7F00h
 CS_HREDRAW          equ 2
 CS_VREDRAW          equ 1
@@ -124,7 +156,6 @@ SW_SHOW             equ 5
 WM_DESTROY          equ 2
 WM_CLOSE            equ 10h
 WM_PAINT            equ 0Fh
-WM_SIZE             equ 5
 WM_KEYDOWN          equ 100h
 WM_KEYUP            equ 101h
 WM_SYSKEYDOWN       equ 104h
@@ -136,14 +167,12 @@ VK_W        equ 57h
 VK_A        equ 41h
 VK_S        equ 53h
 VK_D        equ 44h
-VK_SPACE    equ 20h
-VK_ESCAPE   equ 1Bh
 VK_LBUTTON  equ 01h
 VK_RBUTTON  equ 02h
 VK_SHIFT    equ 10h
 VK_BACK     equ 08h
 
-; BITMAPINFOHEADER offsets
+; BITMAPINFOHEADER
 BISIZE           equ 0
 BIWIDTH          equ 4
 BIHEIGHT         equ 8
@@ -158,11 +187,11 @@ BICLRIMPORTANT   equ 36
 BMIHEADER_SIZE   equ 40
 BMICOLORS_OFFSET equ 40
 
-; Window dimensions
+; Window
 WIN_W   equ 960
 WIN_H   equ 600
 
-; Stack frame for game loop
+; Stack frame
 FRAME_SHADOW    equ 00h
 FRAME_PM5       equ 20h
 FRAME_MSG       equ 28h

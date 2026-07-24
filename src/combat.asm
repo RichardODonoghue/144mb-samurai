@@ -2,7 +2,7 @@ section .text
 
 ; ============================================================
 ; update_combat -- advance attack/block state machines
-; Computes blade_swing_x, blade_y_mod, blade_width_mod each frame
+; Computes blade_swing_x, blade_y_mod each frame
 ; ============================================================
 update_combat:
     push    rbx
@@ -23,7 +23,6 @@ update_combat:
     imul    eax, 15
     cvtsi2ss xmm0, eax
     movss   [blade_swing_x], xmm0
-    mov     dword [blade_width_mod], 0x3F800000   ; 1.0
     mov     dword [blade_y_mod], 0
     inc     cl
     mov     [attack_timer], cl
@@ -43,7 +42,6 @@ update_combat:
     add     eax, 60
     cvtsi2ss xmm0, eax
     movss   [blade_swing_x], xmm0
-    mov     dword [blade_width_mod], 0x3F99999A   ; 1.2
     mov     dword [blade_y_mod], 0
     inc     cl
     mov     [attack_timer], cl
@@ -63,7 +61,6 @@ update_combat:
     sub     eax, 60
     cvtsi2ss xmm0, eax
     movss   [blade_swing_x], xmm0
-    mov     dword [blade_width_mod], 0x3F99999A   ; 1.2
     mov     dword [blade_y_mod], 0
     inc     cl
     mov     [attack_timer], cl
@@ -73,7 +70,6 @@ update_combat:
     mov     byte [attack_state], 0
     mov     byte [attack_timer], 0
     mov     dword [blade_swing_x], 0
-    mov     dword [blade_width_mod], 0x3F800000   ; 1.0
     mov     dword [blade_y_mod], 0
     jmp     .combat_done
 
@@ -97,7 +93,6 @@ update_combat:
     imul    eax, 10
     cvtsi2ss xmm0, eax
     movss   [blade_swing_x], xmm0
-    mov     dword [blade_width_mod], 0x3F800000   ; 1.0
     inc     cl
     mov     [block_timer], cl
     cmp     cl, BLOCK_RAISE_FRAMES
@@ -121,7 +116,6 @@ update_combat:
     mov     eax, BLOCK_X_OFFSET
     cvtsi2ss xmm0, eax
     movss   [blade_swing_x], xmm0
-    mov     dword [blade_width_mod], 0x3F800000   ; 1.0
     jmp     .combat_done
 
 .chk_block_release:
@@ -146,7 +140,6 @@ update_combat:
 .brx_ok:
     cvtsi2ss xmm0, ebx
     movss   [blade_swing_x], xmm0
-    mov     dword [blade_width_mod], 0x3F800000   ; 1.0
     inc     cl
     mov     [block_timer], cl
     cmp     cl, 4
@@ -159,7 +152,6 @@ update_combat:
 
 .no_block:
     mov     dword [blade_swing_x], 0
-    mov     dword [blade_width_mod], 0x3F800000   ; 1.0
     mov     dword [blade_y_mod], 0
 
 .combat_done:

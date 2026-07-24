@@ -646,6 +646,59 @@ def gen_roof_type_heights():
     Index = wall_type - 1: brick, stone, wood, (unused), burnt, fire."""
     return [18, 0, 14, 0, 8, 0]  # tall home, no roof, moderate shop, -, damaged, none
 
+
+def gen_roof_tile():
+    """32x32 Japanese curved roof tile texture. Uses palette 248-253 directly.
+    Two horizontal rows of semi-cylindrical tiles with mortar gaps."""
+    rows = []
+    for y in range(32):
+        row = []
+        tile_row = y // 16        ; within_tile = y % 16
+        for x in range(32):
+            wt = y % 16
+            if wt <= 1:
+                row.append(251)       # shadow under tile edge
+            elif wt <= 3:
+                row.append(248)       # dark tile body
+            elif wt <= 5:
+                row.append(253)       # highlight ridge near top
+                if x % 6 < 2:
+                    row[-1] = 249     # lighter highlight alternating
+            elif wt <= 12:
+                row.append(249)       # light tile body
+                if (x + tile_row * 8) % 13 < 3:
+                    row[-1] = 248     # subtle vertical shadow bands
+            elif wt <= 14:
+                row.append(248)       # dark top of next tile
+            else:
+                row.append(251)       # deep shadow under next tile
+        rows.append(row)
+    return rows
+
+
+def gen_foundation_tile():
+    """32x8 stone block foundation texture. Uses palette 248-253.
+    Stone blocks with mortar lines and surface texture."""
+    h = 8
+    rows = []
+    for y in range(h):
+        row = []
+        for x in range(32):
+            bx, by = x // 8, y // 4
+            # Mortar lines between blocks
+            if x % 8 == 0 or y % 4 == 0:
+                row.append(251)       # dark mortar
+            else:
+                n = PERM[(x + y * 31 + bx * 17) & 255] / 255.0
+                if n < 0.25:
+                    row.append(248)   # dark stone variation
+                elif n < 0.6:
+                    row.append(252)   # mid stone (foundation color)
+                else:
+                    row.append(253)   # light stone highlight
+        rows.append(row)
+    return rows
+
 # ============================================================
 # OUTPUT FILES
 # ============================================================
@@ -682,10 +735,14 @@ def main():
         'floor_stone': gen_floor_stone(),
         'floor_wood': gen_floor_wood(),
         'hud_panel': gen_hud_panel(),
+        'roof': gen_roof_tile(),
+        'foundation': gen_foundation_tile(),
     }
 
     with open("src/tex_gen.inc", "w") as f:
-        f.write("; Auto-generated wall and floor textures (32x32, 4-bit texels 0-7)\n\n")
+        f.write("; Auto-generated wall, floor, roof, and foundation textures\n")
+        f.write("; Wall/floor textures: 32x32, 4-bit texels 0-7\n")
+        f.write("; Roof/foundation textures: direct palette indices (8-bit)\n\n")
         for name, rows in textures.items():
             write_tex(f, name, rows)
 

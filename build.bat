@@ -10,10 +10,31 @@ if errorlevel 1 (
 
 set "NASM=C:\Users\richard\AppData\Local\bin\NASM\nasm.exe"
 
+echo Generating textures...
+py -3 src/gen_textures.py
+if errorlevel 1 (
+    echo Texture generation failed
+    exit /b 1
+)
+
+echo Generating faces...
+py -3 src/gen_faces.py
+if errorlevel 1 (
+    echo Face generation failed
+    exit /b 1
+)
+
+echo Generating weapon sprites...
+py -3 src/gen_weapon.py
+if errorlevel 1 (
+    echo Weapon sprite generation failed
+    exit /b 1
+)
+
 if not exist build mkdir build
 
 echo Assembling...
-"%NASM%" -f win64 src\main.asm -o build\main.obj
+"%NASM%" -f win64 -w-label-redef-late src\main.asm -o build\main.obj
 if errorlevel 1 (
     echo NASM assembly failed
     exit /b 1
