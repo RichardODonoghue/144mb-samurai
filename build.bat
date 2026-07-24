@@ -8,45 +8,37 @@ if errorlevel 1 (
     exit /b 1
 )
 
-set "NASM=C:\Users\richard\AppData\Local\bin\NASM\nasm.exe"
-
-echo Generating textures...
+echo.
+echo Generating assets...
 py -3 src/gen_textures.py
-if errorlevel 1 (
-    echo Texture generation failed
-    exit /b 1
-)
+if errorlevel 1 (echo Texture generation failed & exit /b 1)
 
-echo Generating faces...
 py -3 src/gen_faces.py
-if errorlevel 1 (
-    echo Face generation failed
-    exit /b 1
-)
+if errorlevel 1 (echo Face generation failed & exit /b 1)
 
-echo Generating weapon sprites...
 py -3 src/gen_weapon.py
-if errorlevel 1 (
-    echo Weapon sprite generation failed
-    exit /b 1
-)
+if errorlevel 1 (echo Weapon generation failed & exit /b 1)
 
 if not exist build mkdir build
 
-echo Assembling...
-"%NASM%" -f win64 -w-label-redef-late src\main.asm -o build\main.obj
-if errorlevel 1 (
-    echo NASM assembly failed
-    exit /b 1
-)
+echo.
+echo Compiling...
+cl /nologo /O2 /Oi- /GS- /Gs9999999 /GR- /EHs-c- /TC ^
+   src/main.c src/data.c src/render.c src/floor.c src/input.c ^
+   src/hud.c src/weapon.c src/sprite.c src/effects.c src/combat.c ^
+   src/level.c src/init.c src/wndproc.c src/crt_stubs.c ^
+   /link /SUBSYSTEM:WINDOWS /ENTRY:mainCRTStartup /NODEFAULTLIB /LARGEADDRESSAWARE:NO ^
+         /OPT:REF /OPT:ICF ^
+         kernel32.lib user32.lib gdi32.lib ^
+         /OUT:build/game.exe
 
-echo Linking...
-link /SUBSYSTEM:WINDOWS /ENTRY:main /NODEFAULTLIB /LARGEADDRESSAWARE:NO build\main.obj kernel32.lib user32.lib gdi32.lib /OUT:build\game.exe
 if errorlevel 1 (
-    echo Link failed
+    echo.
+    echo Compilation FAILED
     exit /b 1
 )
 
 echo.
+echo =====================================
 echo Build complete: build\game.exe
 for %%F in (build\game.exe) do echo Size: %%~zF bytes
